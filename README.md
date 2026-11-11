@@ -32,28 +32,53 @@
 
 ## Как открыть проект (один раз)
 
-Нужно: [Unity Hub](https://unity.com/download) и **Unity 6 LTS** с модулем **Android Build Support** (галочки OpenJDK и Android SDK & NDK тоже).
+Нужно: [Unity Hub](https://unity.com/download) и **Unity 6000.3.22f1** (это Unity 6.3 LTS) с модулем **Android Build Support** (галочки OpenJDK и Android SDK & NDK тоже). Версия должна совпадать с облачной сборкой: в Unity Hub → Installs → Install Editor → вкладка Archive.
 
 1. Установи [GitHub Desktop](https://desktop.github.com/) и склонируй этот репозиторий, например в `Документы/Phelki`.
-2. В Unity Hub создай **новый** проект по шаблону **Universal 3D** с любым именем, например `PhelkiTemp`. Дождись, пока откроется, и закрой Unity.
-3. Из папки `PhelkiTemp` скопируй в `Документы/Phelki`:
-   - папки `Packages` и `ProjectSettings` целиком;
-   - всё содержимое папки `Assets` — в папку `Assets` репозитория (там уже лежит `Phelki`, её не трогай).
-4. В Unity Hub: **Add → Add project from disk** → выбери `Документы/Phelki`. Открой.
-5. Открой сцену `Assets/Scenes/SampleScene` и нажми **Play**. Игра соберётся сама.
-6. В окне Game выбери вертикальное разрешение (например 1080×1920). Мышь работает как палец.
-7. В GitHub Desktop сделай коммит — так проект с настройками сохранится в репозитории.
+2. В Unity Hub: **Add → Add project from disk** → выбери `Документы/Phelki`. Открой (первый раз долго — Unity создаёт недостающие настройки).
+3. Меню **Phelki → Создать главную сцену**, затем нажми **Play**. Игра соберётся сама.
+4. В окне Game выбери вертикальное разрешение (например 1080×1920). Мышь работает как палец.
+5. В GitHub Desktop закоммить новые файлы (папка `ProjectSettings` и сцена) — так настройки сохранятся в репозитории.
 
 Если в консоли Unity появились красные ошибки — пришли их текст, поправлю.
 
 **Снова увидеть вопрос деда:** меню **Phelki → Сбросить профиль**. Так же можно проверить обе стороны: ответь «Нет», чтобы попасть в побег, или нажми «Я передумал» в первые 10 минут.
 
-## Как собрать на телефон (Android)
+## Сборка APK в GitHub Actions
+
+Каждый пуш в `main` собирает APK в облаке (через [GameCI](https://game.ci)). Сборка идёт 20–40 минут, следующие — быстрее за счёт кэша. Можно запустить и вручную: вкладка **Actions → Сборка APK → Run workflow**.
+
+### Один раз: дать облаку лицензию Unity
+
+Unity бесплатна (Personal), но облаку нужен файл лицензии и твой аккаунт Unity. Они хранятся в секретах репозитория — их никто не видит, даже в логах.
+
+1. В Unity Hub войди в свой аккаунт Unity → **Settings → Licenses → Add → Get a free personal license**.
+2. Найди файл лицензии `Unity_lic.ulf`:
+   - Windows: `C:\ProgramData\Unity\Unity_lic.ulf` (папка ProgramData скрытая — вставь путь в адресную строку проводника);
+   - macOS: `/Library/Application Support/Unity/Unity_lic.ulf`;
+   - Linux: `~/.local/share/unity3d/Unity/Unity_lic.ulf`.
+3. Открой его Блокнотом и скопируй **весь** текст.
+4. На GitHub: репозиторий → **Settings → Secrets and variables → Actions → New repository secret**. Создай три секрета:
+   - `UNITY_LICENSE` — весь текст файла лицензии;
+   - `UNITY_EMAIL` — почта от аккаунта Unity;
+   - `UNITY_PASSWORD` — пароль от аккаунта Unity.
+5. Вкладка **Actions → Сборка APK → Run workflow**.
+
+Если у аккаунта Unity включена двухфакторная защита, облачная активация может не пройти — тогда пришли лог ошибки, разберёмся.
+
+### Как поставить APK на телефон
+
+1. Открой завершённую сборку во вкладке **Actions**, внизу в **Artifacts** скачай `Phelki-apk-N`.
+2. Распакуй zip — внутри `Phelki.apk`. Перекинь на телефон.
+3. Открой файл на телефоне и разреши установку из неизвестных источников.
+
+APK подписан отладочным ключом — для тестов этого достаточно. Для Google Play и RuStore позже понадобится свой ключ подписи.
+
+## Сборка на телефон вручную (Android)
 
 1. **File → Build Profiles → Android → Switch Platform.**
-2. **Player Settings:** Company Name, Product Name «Пчёлок уважаешь?», Package Name `com.b0dr0dev.phelki`, Default Orientation — Portrait.
-3. Включи на телефоне режим разработчика и отладку по USB, подключи кабелем.
-4. **Build And Run.**
+2. Включи на телефоне режим разработчика и отладку по USB, подключи кабелем.
+3. Меню **Phelki → Собрать APK** (сам выставит имя, пакет `com.b0dr0dev.phelki`, портрет, IL2CPP ARM64) — APK появится в `build/Android`. Или **Build And Run** в окне сборки.
 
 ## Как заменить заглушки на модели
 
@@ -70,6 +95,8 @@ Assets/Phelki/Scripts/
   World/  дача, цветы, улей, пыльца, осы, варенье, вентилятор, рой, машина
   Human/  побег за людей: дачник, пчёлы-боты, банки мёда, дым, матч
   UI/     экраны и элементы интерфейса
+Assets/Phelki/Editor/CiBuild.cs   сборка APK (облако и меню Phelki)
+.github/workflows/android.yml     облачная сборка в GitHub Actions
 ```
 
 Всё собирается кодом при нажатии Play, поэтому сцену руками собирать не нужно. Чтобы отключить автосборку в какой-то сцене, повесь на любой объект компонент `ManualSceneMarker`.
