@@ -1,43 +1,24 @@
-# Unity
-/[Ll]ibrary/
-/[Tt]emp/
-/[Oo]bj/
-/[Bb]uild/
-/[Bb]uilds/
-/[Ll]ogs/
-/[Uu]ser[Ss]ettings/
-/[Mm]emoryCaptures/
-/[Rr]ecordings/
+# Godot
+.godot/
+.import/
+*.translation
+export_credentials.cfg
+/android/
 
 # Сборки
+/build/
 *.apk
 *.aab
-*.unitypackage
-*.app
-crashlytics-build.properties
-
-# IDE
-.vs/
-.vscode/
-.idea/
-*.csproj
-*.unityproj
-*.sln
-*.suo
-*.user
-*.userprefs
-*.pidb
-*.booproj
-*.svd
-*.pdb
-*.mdb
-*.opendb
-*.VC.db
-
-# Системное
-.DS_Store
-Thumbs.db
 
 # Ключи подписи Android — никогда не коммитить
 *.keystore
 *.jks
+
+# Системное
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Тестовый ключ для облачных сборок (не секретный, не для магазинов)
+!ci/debug.keystore

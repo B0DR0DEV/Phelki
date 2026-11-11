@@ -1,0 +1,112 @@
+name: Сборка игры
+
+# Каждый пуш в main: автотест → APK для Android + веб-версия.
+# Без аккаунтов, лицензий и секретов — Godot скачивается прямо с GitHub.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # выложить APK в Releases
+  pages: write      # выложить веб-версию
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    name: Автотест
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Кэш Godot
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-dl
+          key: godot-${{ env.GODOT_VERSION }}-editor
+      - name: Поставить Godot
+        run: ci/setup_godot.sh
+      - name: Импорт проекта
+        run: godot --headless --path . --import
+      - name: Автопрохождение обеих сторон
+        run: godot --headless --path . -- --autotest
+
+  android:
+    name: APK для Android
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Кэш Godot и шаблонов
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-dl
+          key: godot-${{ env.GODOT_VERSION }}-templates
+      - name: Поставить Godot и шаблоны экспорта
+        run: ci/setup_godot.sh
+        env:
+          NEED_TEMPLATES: 1
+      - name: Собрать APK
+        run: ci/export_android.sh
+      - name: Сохранить APK в сборке
+        uses: actions/upload-artifact@v4
+        with:
+          name: phelki-apk-${{ github.run_number }}
+          path: build/android/phelki.apk
+          retention-days: 14
+      - name: Выложить APK в Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Сборка ${{ github.run_number }}
+          body: |
+            Тестовая сборка «Пчёлок уважаешь?» из коммита ${{ github.sha }}.
+            Скачай phelki.apk на телефон и открой. Подписано тестовым ключом — только для проверки.
+          files: build/android/phelki.apk
+          make_latest: true
+
+  web:
+    name: Веб-версия
+    needs: test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Кэш Godot и шаблонов
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/godot-dl
+          key: godot-${{ env.GODOT_VERSION }}-templates
+      - name: Поставить Godot и шаблоны экспорта
+        run: ci/setup_godot.sh
+        env:
+          NEED_TEMPLATES: 1
+      - name: Собрать веб-версию
+        run: ci/export_web.sh
+      - name: Подготовить для GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  pages:
+    name: Опубликовать на сайте
+    needs: web
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
