@@ -1,11 +1,17 @@
 class_name Profile
 extends RefCounted
-## Профиль игрока. Пока хранится на телефоне (user://profile.json);
-## когда появится сервер, ответ деду и мёд будут храниться там.
+## Профиль игрока: сторона, мёд, рекорды, настройки, пройденное обучение.
+## Хранится на телефоне (user://profile.json).
 
 enum Side { NONE, BEE, HUMAN }
 
 const CHANGE_WINDOW := 600  # секунд, чтобы один раз передумать
+const SAVED := [
+	"side", "answered_at", "changed_once", "honey", "best_sortie_honey", "sorties",
+	"escape_attempts", "escape_wins", "best_escape_time", "survival_best", "hunt_games", "hunt_wins",
+	"race_wins", "race_best", "flappy_best", "bear_games", "bear_wins", "team_wins",
+	"fpv", "vibration", "map_id", "tutorials", "player_name",
+]
 
 static var path := "user://profile.json"
 static var _current: Profile
@@ -19,6 +25,22 @@ var sorties := 0
 var escape_attempts := 0
 var escape_wins := 0
 var best_escape_time := 0.0
+var survival_best := 0.0
+var hunt_games := 0
+var hunt_wins := 0
+var team_wins := 0
+var race_wins := 0
+var race_best := {}  # карта → лучшее время
+var flappy_best := 0
+var bear_games := 0
+var bear_wins := 0
+
+# Настройки
+var fpv := false
+var vibration := true
+var map_id := "dacha"
+var tutorials := {}  # режим → пройдено
+var player_name := ""
 
 
 static func current() -> Profile:
@@ -61,17 +83,23 @@ func answer(chosen: int) -> void:
 	save()
 
 
+func display_name() -> String:
+	if player_name != "":
+		return player_name
+	return "Пасечник" if side == Side.BEE else "Дачник"
+
+
 func save() -> void:
+	if Game.server_mode:
+		return
+	var data := {}
+	for key in SAVED:
+		data[key] = get(key)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
 		push_warning("Не удалось сохранить профиль: %s" % error_string(FileAccess.get_open_error()))
 		return
-	f.store_string(JSON.stringify({
-		"side": side, "answered_at": answered_at, "changed_once": changed_once,
-		"honey": honey, "best_sortie_honey": best_sortie_honey, "sorties": sorties,
-		"escape_attempts": escape_attempts, "escape_wins": escape_wins,
-		"best_escape_time": best_escape_time,
-	}))
+	f.store_string(JSON.stringify(data))
 
 
 static func _load() -> Profile:
@@ -81,13 +109,20 @@ static func _load() -> Profile:
 	var data = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if typeof(data) != TYPE_DICTIONARY:
 		return p
-	p.side = int(data.get("side", 0))
-	p.answered_at = int(data.get("answered_at", 0))
-	p.changed_once = bool(data.get("changed_once", false))
-	p.honey = int(data.get("honey", 0))
-	p.best_sortie_honey = int(data.get("best_sortie_honey", 0))
-	p.sorties = int(data.get("sorties", 0))
-	p.escape_attempts = int(data.get("escape_attempts", 0))
-	p.escape_wins = int(data.get("escape_wins", 0))
-	p.best_escape_time = float(data.get("best_escape_time", 0.0))
+	for key in SAVED:
+		if not data.has(key):
+			continue
+		var cur = p.get(key)
+		match typeof(cur):
+			TYPE_INT:
+				p.set(key, int(data[key]))
+			TYPE_FLOAT:
+				p.set(key, float(data[key]))
+			TYPE_BOOL:
+				p.set(key, bool(data[key]))
+			TYPE_DICTIONARY:
+				if typeof(data[key]) == TYPE_DICTIONARY:
+					p.set(key, data[key])
+			_:
+				p.set(key, str(data[key]))
 	return p

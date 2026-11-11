@@ -37,11 +37,13 @@ func _process(delta: float) -> void:
 		return
 	var game := Game.I
 	var m := game.escape if game else null
-	if m == null or not is_instance_valid(m.human) or m.human.frozen:
+	if m == null:
 		return
-	var d := m.human.global_position - global_position
-	d.y = 0.0
-	if d.length() < RADIUS + 0.38:
-		_taken = true
-		m.on_jar_taken(self)
-		queue_free()
+	for h in m.active_humans():
+		var d := h.global_position - global_position
+		d.y = 0.0
+		if d.length() < RADIUS + 0.38:
+			_taken = true
+			m.on_jar_taken(self)
+			queue_free()
+			return

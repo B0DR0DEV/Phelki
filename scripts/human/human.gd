@@ -21,6 +21,7 @@ const CALM_RATE := 0.02  # в секунду
 
 var swelling := 0.0
 var frozen := false
+var local_control := true  # false — управляет бот или игрок по сети
 var facing := 0.0  # курс в радианах
 
 var _visual: HumanVisual
@@ -86,7 +87,8 @@ func _match() -> EscapeMatch:
 
 
 func _process(_delta: float) -> void:
-	_finger.active = not frozen and Game.I != null and Game.I.state == Game.State.ESCAPE
+	_finger.active = local_control and not frozen and Game.I != null and Game.I.state == Game.State.ESCAPE
+	_finger.fpv_yaw = facing if Game.I and Game.I.fpv and local_control else null
 	var swipe := _finger.poll()
 	if swipe != Vector2.ZERO and Game.clock >= _dodge_ready_at:
 		dodge(FingerTracker.screen_dir_to_world(get_viewport().get_camera_3d(), swipe))
@@ -161,8 +163,17 @@ func swat() -> void:
 		hits += 1
 		if hits >= 4:
 			break
+	# Живые пчёлы-игроки тоже получают мухобойкой
+	for pb in m.player_bees:
+		if not is_instance_valid(pb):
+			continue
+		var d := pb.global_position - chest
+		var flat := Vector3(d.x, 0.0, d.z)
+		if d.length() <= SWAT_RANGE and (d.length() < 1.1 or rad_to_deg(fwd.angle_to(flat)) <= 75.0):
+			pb.knock(flat.normalized() * 7.0, 2.0)
+			hits += 1
 
-	if hits > 0:
+	if hits > 0 and m.is_local(self):
 		m.stats.swats += hits
 		Game.I.toast("Шлёп!" if hits == 1 else "Шлёп ×%d!" % hits)
 		if randf() < 0.35:
@@ -180,8 +191,13 @@ func smoke() -> void:
 		if is_instance_valid(bot) and bot.global_position.distance_to(global_position) <= SMOKE_RADIUS:
 			bot.sleep(3.5)
 			slept += 1
-	m.stats.smokes += 1
-	Game.I.toast("Дым! Уснули: %d" % slept if slept > 0 else "Дым!")
+	for pb in m.player_bees:
+		if is_instance_valid(pb) and pb.global_position.distance_to(global_position) <= SMOKE_RADIUS:
+			pb.stick(3.0)
+			slept += 1
+	if m.is_local(self):
+		m.stats.smokes += 1
+		Game.I.toast("Дым! Уснули: %d" % slept if slept > 0 else "Дым!")
 	Game.I.say(Lines.pick(Lines.SMOKE_USED))
 
 
@@ -196,7 +212,9 @@ func try_sting() -> bool:
 	if m:
 		m.on_stung(self)
 	_visual.flinch()
-	Game.I.cam.shake(0.25)
+	if m and m.is_local(self):
+		Game.I.cam.shake(0.25)
+		Game.vibrate(60)
 	return true
 
 

@@ -19,6 +19,10 @@ const RADIUS := 0.38
 
 var pollen := 0
 var steering := false
+var local_control := true  # false — управляет бот или игрок по сети
+var heading := 0.0  # курс в радианах (для вида от первого лица)
+var sting_ready_at := 0.0
+var cruise_height := CRUISE_HEIGHT  # в перегонках — высота колец  # в охоте на дачников: когда снова можно ужалить
 var current_flower: Flower
 
 var _finger: FingerTracker
@@ -87,7 +91,8 @@ func _stats() -> SortieStats:
 
 
 func _process(_delta: float) -> void:
-	_finger.active = Game.I != null and Game.I.state == Game.State.SORTIE
+	_finger.active = local_control and Game.I != null and Game.I.bee_controls_active()
+	_finger.fpv_yaw = heading if Game.I and Game.I.fpv and local_control else null
 	var swipe := _finger.poll()
 	steering = _finger.is_held() and Game.clock >= _stun_until
 	if swipe != Vector2.ZERO and Game.clock >= _dash_ready_at:
@@ -125,9 +130,11 @@ func _physics_process(delta: float) -> void:
 		horiz = horiz.limit_length(maxf(cap * 1.8, 12.0))
 
 	# Высота: зависли рядом с цветком — опускаемся к нему.
-	var target_y := CRUISE_HEIGHT
+	var target_y := cruise_height
 	current_flower = null
-	if world and not is_dashing() and horiz.length() < 3.6:
+	if horiz.length() > 1.0:
+		heading = lerp_angle(heading, atan2(horiz.x, horiz.z), clampf(6.0 * delta, 0.0, 1.0))
+	if world and Game.I.state == Game.State.SORTIE and not is_dashing() and horiz.length() < 3.6:
 		var f := world.nearest_flower(global_position, 1.7)
 		if f:
 			current_flower = f
@@ -174,6 +181,8 @@ func _handle_collisions(before: Vector3) -> void:
 		drop_pollen(maxi(1, roundi(pollen * 0.25)))
 	_visual.tumble()
 	Game.I.say(Lines.pick(Lines.CRASH))
+	if local_control:
+		Game.vibrate(40)
 
 
 func _collect(delta: float) -> void:

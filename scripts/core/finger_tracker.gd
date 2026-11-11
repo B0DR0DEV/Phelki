@@ -11,6 +11,12 @@ var position := Vector2.ZERO
 ## Для автотеста: если задано — «палец» держит эту точку мира.
 var debug_world_target = null
 
+## Вид от первого лица: курс персонажа (радианы). Тогда палец не «точка на земле»,
+## а руль: левее центра — поворот налево, правее — направо.
+var fpv_yaw = null
+## Чей это руль (по умолчанию — родитель).
+var origin: Node3D = null
+
 var _samples: Array = []  # [время, позиция]
 var _swipe_used := false
 
@@ -60,6 +66,12 @@ func is_held() -> bool:
 func world_point(height: float):
 	if debug_world_target != null:
 		return debug_world_target
+	if fpv_yaw != null:
+		var owner3d: Node3D = origin if origin else get_parent() as Node3D
+		var w := get_viewport().get_visible_rect().size.x
+		var turn := clampf((position.x / maxf(w, 1.0) - 0.5) * 2.0, -1.0, 1.0)
+		var yaw: float = fpv_yaw - turn * 1.1
+		return owner3d.global_position + Vector3(sin(yaw), 0.0, cos(yaw)) * 6.0
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
 		return null

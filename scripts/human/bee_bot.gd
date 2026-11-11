@@ -68,6 +68,12 @@ func disabled() -> bool:
 	return stunned() or asleep()
 
 
+## Для сетевой копии на клиенте: состояние приходит с сервера.
+func net_flags(is_stunned: bool, is_asleep: bool) -> void:
+	_stun_until = Game.clock + 0.2 if is_stunned else 0.0
+	_sleep_until = Game.clock + 0.2 if is_asleep else 0.0
+
+
 func stun(seconds: float, push: Vector3) -> void:
 	_stun_until = Game.clock + seconds
 	velocity = push
@@ -80,7 +86,7 @@ func sleep(seconds: float) -> void:
 func _physics_process(delta: float) -> void:
 	var game := Game.I
 	var m := game.escape if game else null
-	var human: Human = m.human if m else null
+	var human: Human = m.nearest_human(global_position) if m else null
 	var pos := global_position
 
 	if stunned():

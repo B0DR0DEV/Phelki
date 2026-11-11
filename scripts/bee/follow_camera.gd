@@ -68,6 +68,10 @@ func _process(delta: float) -> void:
 			global_basis = global_basis.slerp(want.basis, clampf(3.0 * delta, 0.0, 1.0))
 		return
 
+	if Game.I and Game.I.fpv:
+		_first_person(delta)
+		return
+
 	# Плавное следование (критически затухающая пружина)
 	var goal := _goal()
 	var omega := 2.0 / SMOOTH
@@ -82,3 +86,26 @@ func _process(delta: float) -> void:
 		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * _shake * 0.3
 		_shake = move_toward(_shake, 0.0, delta * 1.5)
 	_look_fixed()
+
+
+## Вид от первого лица: камера в голове персонажа, смотрит по его курсу.
+func _first_person(delta: float) -> void:
+	var yaw := 0.0
+	var eye := Vector3.ZERO
+	var ahead := 0.45
+	if _target is Bee:
+		yaw = (_target as Bee).heading
+		eye = Vector3(0, 0.3, 0)
+		ahead = 1.1  # впереди головы, чтобы не смотреть изнутри глаза
+	elif _target is Human:
+		yaw = (_target as Human).facing
+		eye = Vector3(0, 1.85, 0)
+		ahead = 0.55
+	var dir := Vector3(sin(yaw), 0.0, cos(yaw))
+	var want := _target.global_position + eye + dir * ahead
+	global_position = global_position.lerp(want, clampf(18.0 * delta, 0.0, 1.0))
+	var want_basis := Basis.looking_at(dir + Vector3(0, -0.12, 0), Vector3.UP)
+	global_basis = global_basis.slerp(want_basis, clampf(10.0 * delta, 0.0, 1.0))
+	if _shake > 0.0:
+		global_position += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.1
+		_shake = move_toward(_shake, 0.0, delta * 1.5)
