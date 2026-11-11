@@ -17,6 +17,11 @@ namespace Phelki
         bool _hub = true;
         float _orbit = -20f;
         Vector3 _velocity;
+        float _baseHeight = 1.5f;
+        float _shake;
+
+        /// <summary>Встряхнуть камеру (укус, удар).</summary>
+        public void Shake(float amount) => _shake = Mathf.Max(_shake, amount);
 
         public static FollowCamera Setup(World world)
         {
@@ -44,10 +49,12 @@ namespace Phelki
             _target = null;
         }
 
-        public void Follow(Transform target)
+        /// <summary>baseHeight — обычная высота цели над землёй (пчела ~2, человек ~1).</summary>
+        public void Follow(Transform target, float baseHeight = 1.5f)
         {
             _hub = false;
             _target = target;
+            _baseHeight = baseHeight;
             _velocity = Vector3.zero;
             if (target != null)
             {
@@ -76,7 +83,9 @@ namespace Phelki
             }
 
             Vector3 goal = _target.position + offset;
-            goal.y = offset.y + 1.5f; // не прыгаем по высоте, когда пчела ныряет к цветку
+            goal.y = offset.y + _baseHeight; // не прыгаем по высоте, когда пчела ныряет к цветку
+            goal += _shake * Random.insideUnitSphere;
+            _shake = Mathf.MoveTowards(_shake, 0f, Time.deltaTime * 1.5f);
             transform.position = Vector3.SmoothDamp(transform.position, goal, ref _velocity, followSmooth);
             transform.rotation = FixedRotation();
         }

@@ -13,6 +13,8 @@ namespace Phelki
         [Header("Персонажи (смотрят вперёд по оси Z, размер пчелы ~0.8 м)")]
         public GameObject bee;
         public GameObject wasp;
+        [Tooltip("Дачник за сторону людей, рост ~2 м, ноги на нуле")]
+        public GameObject human;
 
         [Header("Пасека")]
         public GameObject hive;
@@ -27,6 +29,8 @@ namespace Phelki
         public GameObject jamJar;
         public GameObject fan;
         public GameObject trashCan;
+        public GameObject car;
+        public GameObject honeyJar;
 
         static PhelkiArtSet _loaded;
         static bool _tried;

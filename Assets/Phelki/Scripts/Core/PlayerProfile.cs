@@ -27,6 +27,11 @@ namespace Phelki
         public int bestSortieHoney;
         public int sorties;
 
+        // Сторона людей
+        public int escapeAttempts;
+        public int escapeWins;
+        public float bestEscapeTime; // 0 — ещё не сбегал
+
         static PlayerProfile _current;
 
         public static PlayerProfile Current

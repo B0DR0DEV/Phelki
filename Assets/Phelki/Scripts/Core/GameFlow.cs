@@ -23,6 +23,7 @@ namespace Phelki
             Question,
             Hub,
             Sortie,
+            Escape,
             Results
         }
 
@@ -37,6 +38,9 @@ namespace Phelki
         public Screens Ui { get; private set; }
         public SortieStats Stats { get; private set; }
         public float TimeLeft { get; private set; }
+
+        /// <summary>Текущий матч побега за людей (или null).</summary>
+        public EscapeMatch Escape { get; private set; }
 
         bool _timeLowSaid;
 
@@ -66,8 +70,7 @@ namespace Phelki
         {
             PlayerProfile.Current.Answer(side);
             Say(Lines.Pick(side == Side.Bee ? Lines.AnsweredBee : Lines.AnsweredHuman), 3f);
-            if (side == Side.Human) World.AngerBees();
-            ShowHub();
+            if (side == Side.Human) World.AngerBees();            ShowHub();
         }
 
         public void ShowHub()
@@ -114,6 +117,47 @@ namespace Phelki
             Current = State.Results;
             Cam.ShowHub();
             Ui.ShowResults(Stats, record);
+        }
+
+        // ── Побег за людей ─────────────────────────────────────
+
+        public void StartEscape()
+        {
+            if (PlayerProfile.Current.Side != Side.Human) return;
+
+            World.PrepareEscape();
+            Escape = EscapeMatch.Begin(World, transform);
+            Cam.Follow(Escape.Human.transform, 0.9f);
+            Current = State.Escape;
+            Ui.ShowEscapeHud();
+            Say(Lines.Pick(Lines.EscapeStart), 3f);
+        }
+
+        /// <summary>Вызывается матчем, когда концовка доиграна; можно и досрочно (кнопка «Сдаться»).</summary>
+        public void EndEscape()
+        {
+            if (Current != State.Escape || Escape == null) return;
+
+            var stats = Escape.Stats;
+            if (string.IsNullOrEmpty(stats.ending)) stats.ending = "gaveup";
+            Destroy(Escape.gameObject);
+            Escape = null;
+            World.EndEscape();
+
+            var p = PlayerProfile.Current;
+            p.escapeAttempts++;
+            bool record = false;
+            if (stats.escaped)
+            {
+                p.escapeWins++;
+                record = p.bestEscapeTime <= 0f || stats.time < p.bestEscapeTime;
+                if (record) p.bestEscapeTime = stats.time;
+            }
+            p.Save();
+
+            Current = State.Results;
+            Cam.ShowHub();
+            Ui.ShowEscapeResults(stats, record);
         }
 
         void Update()

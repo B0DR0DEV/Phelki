@@ -42,8 +42,8 @@ namespace Phelki
         float _dashUntil, _dashReadyAt, _stuckUntil, _stunUntil, _lastCrash, _collectAcc;
         Vector3 _dashDir, _externalForce;
         Vector2 _pointer;
-        bool _pressed, _swipeUsed, _fullSaid;
-        readonly Queue<(float t, Vector2 p)> _samples = new Queue<(float t, Vector2 p)>();
+        bool _fullSaid;
+        readonly FingerTracker _finger = new FingerTracker();
 
         static SortieStats Stats => GameFlow.I != null ? GameFlow.I.Stats : null;
 
@@ -85,34 +85,10 @@ namespace Phelki
         void Update()
         {
             bool active = GameFlow.I != null && GameFlow.I.Current == GameFlow.State.Sortie;
-            _pressed = active && PointerInput.Pressed(out _pointer);
-            IsSteering = _pressed && Time.time >= _stunUntil;
-
-            if (_pressed)
-            {
-                _samples.Enqueue((Time.time, _pointer));
-                while (_samples.Count > 0 && Time.time - _samples.Peek().t > 0.12f) _samples.Dequeue();
-
-                if (!_swipeUsed && _samples.Count >= 2 && Time.time >= _dashReadyAt)
-                {
-                    var first = _samples.Peek();
-                    float dt = Time.time - first.t;
-                    if (dt > 0.02f)
-                    {
-                        Vector2 swipe = (_pointer - first.p) / dt;
-                        if (swipe.magnitude > Screen.height * 2.4f)
-                        {
-                            Dash(swipe.normalized);
-                            _swipeUsed = true;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                _samples.Clear();
-                _swipeUsed = false;
-            }
+            Vector2 swipe = _finger.Update(active);
+            _pointer = _finger.Position;
+            IsSteering = _finger.Pressed && Time.time >= _stunUntil;
+            if (swipe != Vector2.zero && Time.time >= _dashReadyAt) Dash(swipe);
         }
 
         void FixedUpdate()

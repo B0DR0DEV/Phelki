@@ -34,6 +34,12 @@ namespace Phelki
         CanvasGroup _hintGroup;
         float _hintAt;
 
+        bool _escapeHudActive;
+        Text _jarsText, _swellText, _targetText, _swatLabel, _smokeLabel;
+        RectTransform _swellFill, _carFill, _targetArrow;
+        CanvasGroup _carGroup;
+        Button _swatBtn, _smokeBtn;
+
         static readonly Color SoftWhite = new Color(1f, 1f, 1f, 0.85f);
         static readonly Color CardBg = new Color(1f, 0.98f, 0.93f, 0.97f);
         static readonly Color DeepHoney = new Color(0.85f, 0.52f, 0.04f);
@@ -90,6 +96,7 @@ namespace Phelki
             _screen.SetSiblingIndex(0); // под репликой деда и всплывашками
             _questionActive = false;
             _hudActive = false;
+            _escapeHudActive = false;
             _changeBtn = null;
             _changeLabel = null;
             return _screen;
@@ -149,8 +156,9 @@ namespace Phelki
             {
                 UiKit.Label(top.transform, "Неуважающий", 46, new Vector2(0.05f, 0f), new Vector2(0.5f, 1f),
                     TextAnchor.MiddleLeft, new Color(1f, 0.58f, 0.52f), FontStyle.Bold);
-                UiKit.Label(top.transform, "Пчёлы помнят твоё лицо", 34, new Vector2(0.45f, 0f), new Vector2(0.95f, 1f),
-                    TextAnchor.MiddleRight);
+                string best = p.bestEscapeTime > 0f ? $" · лучший {FormatTime(p.bestEscapeTime)}" : "";
+                UiKit.Label(top.transform, $"Побегов: {p.escapeWins}/{p.escapeAttempts}{best}", 34,
+                    new Vector2(0.45f, 0f), new Vector2(0.95f, 1f), TextAnchor.MiddleRight);
             }
 
             UiKit.Label(s, bee ? "Твоя пасека" : "Ты не уважаешь пчёлок", 76, new Vector2(0.04f, 0.82f),
@@ -168,12 +176,10 @@ namespace Phelki
             }
             else
             {
-                UiKit.Label(s, "Скоро здесь будет побег: ты против целого роя. " +
-                               "Режим людей откроется в следующей сборке.", 40,
-                    new Vector2(0.08f, 0.19f), new Vector2(0.92f, 0.33f), TextAnchor.MiddleCenter);
-                var b = UiKit.MakeButton(s, "ПОБЕГ · скоро", new Vector2(0.1f, 0.085f), new Vector2(0.9f, 0.175f),
-                    UiKit.Muted, Color.white, null, 56);
-                b.interactable = false;
+                UiKit.Label(s, "Утащи 3 банки мёда и уезжай на машине. Пчёлы будут жалить — отбивайся мухобойкой и дымом.",
+                    36, new Vector2(0.08f, 0.24f), new Vector2(0.92f, 0.34f), TextAnchor.MiddleCenter);
+                UiKit.MakeButton(s, "ПОБЕГ", new Vector2(0.1f, 0.1f), new Vector2(0.9f, 0.22f), UiKit.DangerBg,
+                    Color.white, () => GameFlow.I.StartEscape(), 84);
             }
 
             if (p.CanChangeAnswer)
@@ -278,6 +284,189 @@ namespace Phelki
             Say(Lines.Pick(stats.honeyMade >= 40 ? Lines.ResultGood : Lines.ResultBad), 4f);
         }
 
+        // ── Побег (HUD за людей) ───────────────────────────────
+
+        public void ShowEscapeHud()
+        {
+            var s = NewScreen("Побег");
+            PlaceSay(0.73f, 0.82f);
+
+            var top = UiKit.Panel(s, "Верх", new Vector2(0.03f, 0.9f), new Vector2(0.97f, 0.975f), UiKit.Shade);
+            _jarsText = UiKit.Label(top.transform, "", 42, new Vector2(0.03f, 0f), new Vector2(0.34f, 1f),
+                TextAnchor.MiddleLeft, UiKit.HoneyBg, FontStyle.Bold);
+            _timerText = UiKit.Label(top.transform, "3:00", 64, new Vector2(0.36f, 0f), new Vector2(0.6f, 1f),
+                TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+            _swellText = UiKit.Label(top.transform, "", 34, new Vector2(0.62f, 0.45f), new Vector2(0.97f, 0.95f),
+                TextAnchor.MiddleRight, Color.white, FontStyle.Bold);
+            var swellBg = UiKit.Panel(top.transform, "Отёк", new Vector2(0.62f, 0.14f), new Vector2(0.97f, 0.38f),
+                new Color(1f, 1f, 1f, 0.18f));
+            _swellFill = UiKit.Panel(swellBg.transform, "Заполнение", Vector2.zero, new Vector2(0.02f, 1f),
+                new Color(0.95f, 0.38f, 0.35f)).rectTransform;
+
+            var targetTag = UiKit.Panel(s, "Цель", new Vector2(0.03f, 0.845f), new Vector2(0.5f, 0.89f), UiKit.Shade);
+            var arrowRt = UiKit.Area("Стрелка", targetTag.transform, new Vector2(0.03f, 0.12f), new Vector2(0.15f, 0.88f));
+            var arrowImg = arrowRt.gameObject.AddComponent<Image>();
+            arrowImg.sprite = UiKit.Triangle;
+            arrowImg.preserveAspect = true;
+            arrowImg.color = UiKit.HoneyBg;
+            arrowImg.raycastTarget = false;
+            _targetArrow = arrowRt;
+            _targetText = UiKit.Label(targetTag.transform, "", 34, new Vector2(0.18f, 0f), new Vector2(0.97f, 1f),
+                TextAnchor.MiddleLeft, Color.white, FontStyle.Bold);
+
+            UiKit.MakeButton(s, "Сдаться", new Vector2(0.72f, 0.845f), new Vector2(0.97f, 0.89f),
+                new Color(1f, 1f, 1f, 0.25f), Color.white, () => GameFlow.I.EndEscape(), 34);
+
+            // Полоса «заводим машину»
+            var car = UiKit.Panel(s, "Заводим", new Vector2(0.12f, 0.58f), new Vector2(0.88f, 0.66f), UiKit.Shade);
+            UiKit.Label(car.transform, "Заводим машину… держись!", 40, new Vector2(0.04f, 0.45f), new Vector2(0.96f, 0.95f),
+                TextAnchor.MiddleCenter, Color.white, FontStyle.Bold);
+            var carBg = UiKit.Panel(car.transform, "Полоса", new Vector2(0.06f, 0.12f), new Vector2(0.94f, 0.38f),
+                new Color(1f, 1f, 1f, 0.18f));
+            _carFill = UiKit.Panel(carBg.transform, "Заполнение", Vector2.zero, new Vector2(0.02f, 1f), UiKit.HoneyBg)
+                .rectTransform;
+            _carGroup = car.gameObject.AddComponent<CanvasGroup>();
+            _carGroup.alpha = 0f;
+            _carGroup.blocksRaycasts = false;
+
+            // Инструменты
+            _smokeBtn = UiKit.MakeButton(s, "Дымарь", new Vector2(0.6f, 0.15f), new Vector2(0.96f, 0.24f),
+                new Color(0.45f, 0.55f, 0.65f), Color.white, () =>
+                {
+                    var h = CurrentHuman();
+                    if (h != null) h.Smoke();
+                }, 46);
+            _smokeLabel = _smokeBtn.GetComponentInChildren<Text>();
+            _swatBtn = UiKit.MakeButton(s, "Мухобойка", new Vector2(0.6f, 0.035f), new Vector2(0.96f, 0.14f),
+                UiKit.HoneyBg, UiKit.Ink, () =>
+                {
+                    var h = CurrentHuman();
+                    if (h != null) h.Swat();
+                }, 50);
+            _swatLabel = _swatBtn.GetComponentInChildren<Text>();
+
+            var hint = UiKit.Panel(s, "Подсказка", new Vector2(0.04f, 0.035f), new Vector2(0.57f, 0.24f), UiKit.Shade);
+            UiKit.Label(hint.transform,
+                "Веди пальцем — бежишь следом.\nСвайп — перекат: пока катишься, не жалят.\n" +
+                "Собери банки и стой у машины, пока заводится.", 32,
+                new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.95f));
+            _hintGroup = hint.gameObject.AddComponent<CanvasGroup>();
+            _hintGroup.blocksRaycasts = false;
+            _hintAt = Time.time;
+
+            _escapeHudActive = true;
+        }
+
+        void UpdateEscapeHud()
+        {
+            var flow = GameFlow.I;
+            var m = flow != null ? flow.Escape : null;
+            if (m == null || m.Human == null) return;
+            var h = m.Human;
+
+            _jarsText.text = m.AllJars ? "Все банки — к машине!" : $"Банки {m.Stats.jars}/{m.Stats.jarsNeeded}";
+            int secs = Mathf.CeilToInt(Mathf.Max(0f, m.TimeLeft));
+            _timerText.text = $"{secs / 60}:{secs % 60:00}";
+            _timerText.color = secs <= 20 ? new Color(1f, 0.55f, 0.5f) : Color.white;
+
+            _swellText.text = $"Отёк {Mathf.RoundToInt(h.Swelling * 100f)}%";
+            _swellFill.anchorMax = new Vector2(Mathf.Max(0.02f, h.Swelling), 1f);
+
+            if (m.TryGetTarget(out var target, out var label))
+            {
+                Vector3 d = target - h.transform.position;
+                d.y = 0f;
+                _targetText.text = $"{label} · {Mathf.RoundToInt(d.magnitude)} м";
+                float camYaw = Camera.main != null ? Camera.main.transform.eulerAngles.y : 0f;
+                float angle = Mathf.Atan2(d.x, d.z) * Mathf.Rad2Deg - camYaw;
+                _targetArrow.localRotation = Quaternion.Euler(0f, 0f, -angle);
+            }
+
+            _carGroup.alpha = Mathf.MoveTowards(_carGroup.alpha, m.CarProgress > 0.01f ? 1f : 0f, Time.deltaTime * 6f);
+            _carFill.anchorMax = new Vector2(Mathf.Max(0.02f, m.CarProgress), 1f);
+
+            float swatIn = h.SwatReadyIn, smokeIn = h.SmokeReadyIn;
+            _swatBtn.interactable = swatIn <= 0f;
+            _swatLabel.text = "Мухобойка";
+            _smokeBtn.interactable = smokeIn <= 0f;
+            _smokeLabel.text = smokeIn > 0f ? $"Дымарь · {Mathf.CeilToInt(smokeIn)}" : "Дымарь";
+
+            float ht = Time.time - _hintAt;
+            _hintGroup.alpha = ht < 8f ? 1f : Mathf.Clamp01(1f - (ht - 8f) / 1.5f);
+        }
+
+        public void ShowEscapeResults(EscapeStats stats, bool record)
+        {
+            var p = PlayerProfile.Current;
+            var s = NewScreen("Итоги побега");
+            PlaceSay(0.81f, 0.895f);
+
+            UiKit.Panel(s, "Затемнение", Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.45f), false);
+            var card = UiKit.Panel(s, "Карточка", new Vector2(0.06f, 0.2f), new Vector2(0.94f, 0.8f), CardBg).transform;
+
+            string title, big;
+            Color bigColor = DeepHoney;
+            switch (stats.ending)
+            {
+                case "escaped":
+                    title = "Ты сбежал!";
+                    big = $"за {FormatTime(stats.time)}";
+                    break;
+                case "ambulance":
+                    title = "Увезли на скорой";
+                    big = $"{stats.stings} укусов";
+                    bigColor = UiKit.DangerBg;
+                    break;
+                case "timeout":
+                    title = "Не успел";
+                    big = "стемнело";
+                    bigColor = UiKit.Muted;
+                    break;
+                default:
+                    title = "Сдался";
+                    big = "пчёлы довольны";
+                    bigColor = UiKit.Muted;
+                    break;
+            }
+
+            UiKit.Label(card, title, 70, new Vector2(0.05f, 0.85f), new Vector2(0.95f, 0.97f),
+                TextAnchor.MiddleCenter, UiKit.Ink, FontStyle.Bold, false);
+            if (record)
+                UiKit.Label(card, "Лучшее время!", 44, new Vector2(0.05f, 0.77f), new Vector2(0.95f, 0.85f),
+                    TextAnchor.MiddleCenter, DeepHoney, FontStyle.Bold, false);
+            UiKit.Label(card, big, 88, new Vector2(0.05f, 0.6f), new Vector2(0.95f, 0.77f),
+                TextAnchor.MiddleCenter, bigColor, FontStyle.Bold, false);
+
+            string body =
+                $"Банок утащено: {stats.jars}/{stats.jarsNeeded}\n" +
+                $"Ужалили: {stats.stings} раз\n" +
+                $"Пчёл сбито мухобойкой: {stats.swats}\n" +
+                $"Дымарь: {stats.smokes} раз\n" +
+                $"Перекатов: {stats.dodges}";
+            UiKit.Label(card, body, 40, new Vector2(0.08f, 0.27f), new Vector2(0.92f, 0.6f), TextAnchor.MiddleLeft,
+                UiKit.Ink, FontStyle.Normal, false);
+            UiKit.Label(card, $"Побегов всего: {p.escapeWins} из {p.escapeAttempts}", 38, new Vector2(0.05f, 0.18f),
+                new Vector2(0.95f, 0.27f), TextAnchor.MiddleCenter, UiKit.Ink, FontStyle.Bold, false);
+
+            UiKit.MakeButton(s, "Ещё раз", new Vector2(0.06f, 0.07f), new Vector2(0.6f, 0.17f), UiKit.DangerBg,
+                Color.white, () => GameFlow.I.StartEscape(), 60);
+            UiKit.MakeButton(s, "В меню", new Vector2(0.63f, 0.07f), new Vector2(0.94f, 0.17f), UiKit.Muted,
+                Color.white, () => GameFlow.I.ShowHub(), 44);
+        }
+
+        static HumanController CurrentHuman()
+        {
+            var flow = GameFlow.I;
+            if (flow == null || flow.Escape == null) return null;
+            return flow.Escape.Human;
+        }
+
+        static string FormatTime(float seconds)
+        {
+            int s = Mathf.Max(0, Mathf.RoundToInt(seconds));
+            return $"{s / 60}:{s % 60:00}";
+        }
+
         // ── Реплики и всплывашки ───────────────────────────────
 
         public void Say(string line, float seconds)
@@ -331,6 +520,7 @@ namespace Phelki
             }
 
             if (_hudActive) UpdateHud();
+            if (_escapeHudActive) UpdateEscapeHud();
         }
 
         void UpdateHud()

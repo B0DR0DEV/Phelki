@@ -17,6 +17,14 @@ namespace Phelki
         public Vector3 HivePosition { get; private set; }
         public Vector3 Wind { get; private set; }
 
+        public Transform EscapeSpawn { get; private set; }
+        public Transform CarDoor { get; private set; }
+        public Vector3[] JarSpots { get; private set; }
+
+        Transform _car;
+        Vector3 _carHome;
+        float _carSpeed;
+
         readonly List<Flower> _flowers = new List<Flower>();
         readonly List<Wasp> _wasps = new List<Wasp>();
         Swarm _swarm;
@@ -71,6 +79,17 @@ namespace Phelki
             BuildTrashCan(new Vector3(20f, 0f, 18f), 2);
             BuildTrashCan(new Vector3(-24f, 0f, -2f), 1);
             BuildClothesline(new Vector3(-14f, 0f, -22f), new Vector3(0f, 0f, -22f));
+
+            // Для побега за людей: машина у ворот, старт дачника, места банок мёда
+            BuildCar(new Vector3(0f, 0f, -27f));
+            EscapeSpawn = Shape.Node("Старт дачника", transform, new Vector3(2.5f, 0.05f, -23.5f));
+            JarSpots = new[]
+            {
+                new Vector3(2f, 0f, 1.4f), new Vector3(-12.5f, 0f, 8.2f), new Vector3(13f, 0f, 7.2f),
+                new Vector3(5f, 0f, -13.4f), new Vector3(-7f, 0f, -20.6f), new Vector3(18.3f, 0f, 16.6f),
+                new Vector3(-16f, 0f, -3.5f), new Vector3(-9f, 0f, 0.6f), new Vector3(22f, 0f, -2f),
+                new Vector3(-24f, 0f, -20f)
+            };
 
             Vector3[] trees =
             {
@@ -469,6 +488,74 @@ namespace Phelki
                 new Color(0.3f, 0.62f, 0.26f), false, "Крона");
             Shape.Make(PrimitiveType.Sphere, root, new Vector3(-0.8f, 4.1f * s, -0.5f), new Vector3(1.8f, 1.6f, 1.8f) * s,
                 new Color(0.22f, 0.5f, 0.2f), false, "Крона");
+        }
+
+        void BuildCar(Vector3 pos)
+        {
+            _car = Shape.Node("Машина", transform, pos);
+            _carHome = pos;
+            // Дверь водителя — со стороны участка (+Z)
+            CarDoor = Shape.Node("Дверь водителя", _car, new Vector3(0.3f, 0f, 1.4f));
+
+            if (_art != null && _art.car != null)
+            {
+                Shape.PlaceModel(_art.car, _car, Vector3.zero);
+                return;
+            }
+
+            Color paint = new Color(0.55f, 0.72f, 0.86f);
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(0f, 0.72f, 0f), new Vector3(4.2f, 0.7f, 1.8f), paint, false, "Кузов");
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(-0.25f, 1.45f, 0f), new Vector3(2.2f, 0.75f, 1.64f), paint, false, "Салон");
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(-0.25f, 1.5f, 0f), new Vector3(2.0f, 0.5f, 1.66f), Palette.Glass, false, "Окна");
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(-0.25f, 1.86f, 0f), new Vector3(1.6f, 0.06f, 1.4f), Palette.Metal, false, "Багажник на крыше");
+            foreach (float z in new[] { -0.6f, 0.6f })
+            {
+                Shape.Make(PrimitiveType.Sphere, _car, new Vector3(2.1f, 0.8f, z), new Vector3(0.08f, 0.22f, 0.22f),
+                    new Color(1f, 0.97f, 0.8f), false, "Фара");
+            }
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(2.15f, 0.45f, 0f), new Vector3(0.12f, 0.16f, 1.84f), Palette.Metal, false, "Бампер");
+            Shape.Make(PrimitiveType.Cube, _car, new Vector3(-2.15f, 0.45f, 0f), new Vector3(0.12f, 0.16f, 1.84f), Palette.Metal, false, "Бампер");
+            foreach (float x in new[] { -1.35f, 1.35f })
+            foreach (float z in new[] { -0.92f, 0.92f })
+                Shape.Make(PrimitiveType.Cylinder, _car, new Vector3(x, 0.34f, z), new Vector3(0.68f, 0.12f, 0.68f),
+                    Palette.Black, false, "Колесо", new Vector3(90f, 0f, 0f));
+
+            var box = _car.gameObject.AddComponent<BoxCollider>();
+            box.center = new Vector3(0f, 0.95f, 0f);
+            box.size = new Vector3(4.3f, 1.9f, 1.85f);
+        }
+
+        /// <summary>Машина уезжает за ворота (концовка «сбежал»).</summary>
+        public void DriveCar(float dt)
+        {
+            if (_car == null) return;
+            _carSpeed = Mathf.Min(_carSpeed + 9f * dt, 16f);
+            _car.position += Vector3.right * (_carSpeed * dt);
+        }
+
+        // ── Побег (за людей) ───────────────────────────────────
+
+        public void PrepareEscape()
+        {
+            ClearDynamic();
+            Wind = Vector3.zero;
+            foreach (var w in _wasps) w.ResetToHome();
+            if (_swarm != null) _swarm.gameObject.SetActive(false); // вместо роя — боты матча
+            ResetCar();
+        }
+
+        public void EndEscape()
+        {
+            ClearDynamic();
+            if (_swarm != null) _swarm.gameObject.SetActive(true);
+            ResetCar();
+        }
+
+        void ResetCar()
+        {
+            if (_car == null) return;
+            _car.position = _carHome;
+            _carSpeed = 0f;
         }
 
         // ── Вылет ──────────────────────────────────────────────
