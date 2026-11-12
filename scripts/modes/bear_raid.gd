@@ -64,41 +64,50 @@ func _setup() -> void:
 
 
 func _build_bear(root: Node3D) -> void:
-	var fur := Color(0.45, 0.28, 0.16)
-	var dark := Color(0.3, 0.18, 0.1)
-	Shape.make(Shape.SPHERE, root, Vector3(0, 1.3, 0), Vector3(2.0, 1.8, 2.8), fur, false, "Туловище")
-	Shape.make(Shape.SPHERE, root, Vector3(0, 2.1, 1.5), Vector3(1.3, 1.2, 1.2), fur, false, "Голова")
-	Shape.make(Shape.SPHERE, root, Vector3(0, 1.95, 2.1), Vector3(0.55, 0.45, 0.5), Color(0.75, 0.6, 0.45), false, "Морда")
-	Shape.make(Shape.SPHERE, root, Vector3(0, 2.05, 2.35), Vector3.ONE * 0.18, Palette.BLACK, false, "Нос")
+	var fur := Color("7a4a2a")
+	var dark := Color("4d2e1b")
+	var muzzle := Color("d9b38a")
+	# Туловище — точёная груша на четырёх лапах
+	Shape.lathe(root, Vector3(0, 1.25, -0.1), [Vector2(0, -0.9), Vector2(0.55, -0.82), Vector2(0.95, -0.4), Vector2(1.0, 0.1),
+		Vector2(0.85, 0.6), Vector2(0.5, 0.95), Vector2(0, 1.0)], [fur, fur, fur, fur, fur, fur, fur], "Туловище", Vector3(80, 0, 0), 18, Vector2(0.95, 1.0))
+	Shape.make(Shape.SPHERE, root, Vector3(0, 1.1, 0.7), Vector3(1.1, 0.9, 0.5), muzzle.darkened(0.1), false, "Брюхо")
+	Shape.make(Shape.SPHERE, root, Vector3(0, 2.1, 1.35), Vector3(1.2, 1.1, 1.1), fur, false, "Голова")
+	Shape.make(Shape.SPHERE, root, Vector3(0, 1.95, 1.9), Vector3(0.6, 0.45, 0.5), muzzle, false, "Морда")
+	Shape.make(Shape.SPHERE, root, Vector3(0, 2.07, 2.13), Vector3(0.22, 0.15, 0.14), Palette.INK, false, "Нос")
 	for side in [-1.0, 1.0]:
-		Shape.make(Shape.SPHERE, root, Vector3(0.45 * side, 2.7, 1.4), Vector3.ONE * 0.4, dark, false, "Ухо")
-		Shape.make(Shape.SPHERE, root, Vector3(0.3 * side, 2.3, 2.02), Vector3.ONE * 0.13, Palette.BLACK, false, "Глаз")
-		for z in [-0.8, 0.8]:
-			Shape.make(Shape.CYLINDER, root, Vector3(0.65 * side, 0.4, z), Vector3(0.6, 0.4, 0.6), dark, false, "Лапа")
+		Shape.make(Shape.SPHERE, root, Vector3(0.42 * side, 2.62, 1.25), Vector3(0.38, 0.38, 0.2), fur, false, "Ухо")
+		Shape.make(Shape.SPHERE, root, Vector3(0.42 * side, 2.62, 1.33), Vector3(0.22, 0.22, 0.08), muzzle, false, "Ухо внутри")
+		Shape.make(Shape.SPHERE, root, Vector3(0.26 * side, 2.32, 1.86), Vector3(0.12, 0.13, 0.06), Palette.INK, false, "Глаз")
+		Shape.make(Shape.SPHERE, root, Vector3(0.24 * side, 2.35, 1.895), Vector3(0.04, 0.04, 0.02), Palette.WHITE, false, "Блик")
+		for z in [-0.8, 0.5]:
+			Shape.make(Shape.CYLINDER, root, Vector3(0.6 * side, 0.4, z), Vector3(0.55, 0.4, 0.6), fur.darkened(0.08), false, "Лапа")
+			Shape.make(Shape.SPHERE, root, Vector3(0.6 * side, 0.05, z + 0.15), Vector3(0.5, 0.18, 0.4), dark, false, "Ступня")
 	for side in [-1.0, 1.0]:
-		var paw := Shape.node("Передняя лапа", root, Vector3(0.95 * side, 1.6, 0.9))
-		Shape.make(Shape.CAPSULE, paw, Vector3(0, -0.4, 0.2), Vector3(0.45, 0.5, 0.45), dark, false, "Лапища")
+		var paw := Shape.node("Передняя лапа", root, Vector3(0.95 * side, 1.65, 0.9))
+		Shape.make(Shape.CAPSULE, paw, Vector3(0, -0.35, 0.2), Vector3(0.42, 0.5, 0.42), fur, false, "Лапища")
+		Shape.make(Shape.SPHERE, paw, Vector3(0, -0.78, 0.32), Vector3(0.42, 0.3, 0.42), dark, false, "Когти")
 		_paws.append(paw)
-	# Банка мёда, которую медведь уже где-то утащил
-	Shape.make(Shape.CYLINDER, root, Vector3(-0.95, 0.9, 1.3), Vector3(0.35, 0.2, 0.35), Palette.HONEY, false, "Чужой мёд")
+	# Украденная где-то банка мёда под мышкой
+	Shape.lathe(root, Vector3(-1.05, 0.75, 1.25), [Vector2(0, 0), Vector2(0.25, 0), Vector2(0.27, 0.05), Vector2(0.27, 0.36), Vector2(0.2, 0.42), Vector2(0.22, 0.48), Vector2(0, 0.5)],
+		[Palette.HONEY, Palette.HONEY, Palette.HONEY, Palette.HONEY, Palette.HONEY, Palette.BERRY, Palette.BERRY], "Чужой мёд", Vector3(0, 0, 15), 12)
+	Shape.compact(root)
 
 
 func _build_hud() -> void:
 	var ui := _game.ui
 	var s := ui.new_screen("Медведь")
+	Sfx.music("game")
 	ui.place_say(0.73, 0.82)
-	var top := UiKit.panel(s, 0.03, 0.9, 0.97, 0.975, UiKit.SHADE)
-	UiKit.label(top, "Медведь", 38, 0.03, 0.45, 0.4, 0.95, HORIZONTAL_ALIGNMENT_LEFT, Color.WHITE, true)
-	var bar := UiKit.panel(top, 0.03, 0.12, 0.6, 0.4, Color(1, 1, 1, 0.18), 10)
-	_ui["hp"] = UiKit.panel(bar, 0, 0, 1, 1, Color(0.85, 0.3, 0.25), 10)
-	_ui["dist"] = UiKit.label(top, "", 34, 0.62, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_RIGHT, UiKit.HONEY_BG, true)
-	var tag := UiKit.panel(s, 0.03, 0.845, 0.42, 0.89, UiKit.SHADE)
-	_ui["arrow"] = UiKit.arrow(tag, 0.03, 0.1, 0.17, 0.9, UiKit.HONEY_BG)
-	_ui["tag"] = UiKit.label(tag, "Медведь", 32, 0.2, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, Color.WHITE, true)
+	var top := UiKit.chip(s, 0.03, 0.915, 0.97, 0.975)
+	UiKit.image(top, UiKit.icon("bear"), 0.01, 0.08, 0.1, 0.92)
+	var bar := UiKit.panel(top, 0.12, 0.25, 0.6, 0.75, UiKit.PAPER_DARK, 8)
+	_ui["hp"] = UiKit.panel(bar, 0, 0, 1, 1, UiKit.BERRY, 8)
+	_ui["dist"] = UiKit.label(top, "", 28, 0.62, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_RIGHT, UiKit.INK, true)
+	_ui["tag"] = ui._target_chip(s)
+	_ui["arrow"] = ui._arrow
 	ui.view_button(s)
-	UiKit.button(s, "Сдаться", 0.72, 0.845, 0.97, 0.89, UiKit.SHADE, Color.WHITE, func(): give_up(), 34)
-	var hint := UiKit.panel(s, 0.05, 0.03, 0.95, 0.12, UiKit.SHADE)
-	UiKit.label(hint, "Свайп в медведя — сильный укус. Не стой рядом, когда он машет лапой!", 32, 0.04, 0.05, 0.96, 0.95)
+	UiKit.button(s, "Сдаться", 0.72, 0.845, 0.97, 0.895, UiKit.PAPER, UiKit.INK, func(): give_up(), 26)
+	ui._hint_chip(s, "Свайп в медведя — сильный укус. Не висни рядом, когда он машет лапой!")
 
 
 func bear_position() -> Vector3:
@@ -147,6 +156,7 @@ func _process(delta: float) -> void:
 			away.y = 0.0
 			bee.knock(away.normalized() * 10.0, 1.0)
 			_game.toast("Медведь отмахнулся!")
+			Sfx.play("thud")
 			Game.vibrate(60)
 		for h in _helpers:
 			h["dart"] = -10.0
@@ -158,6 +168,8 @@ func _process(delta: float) -> void:
 	_update_bee_stings()
 	_update_helpers(delta)
 	_update_hud()
+	if is_instance_valid(bee):
+		Sfx.loop("buzz", 0.45, 1.0 + minf(bee.velocity.length() / 25.0, 0.4))
 
 
 func _update_bee_stings() -> void:
@@ -202,6 +214,9 @@ func _update_helpers(delta: float) -> void:
 
 func _hit(dmg: float, by_player: bool) -> void:
 	hp = maxf(0.0, hp - dmg)
+	Sfx.play("sting", -4.0 if by_player else -14.0, 0.7)
+	if by_player:
+		Fx.stars(_bear.global_position + Vector3(0, 2.6, 0))
 	if by_player:
 		damage_by_player += dmg
 		_game.toast("Ужалила! −%s" % ("%.1f" % dmg).trim_suffix(".0"))
@@ -214,10 +229,10 @@ func _hit(dmg: float, by_player: bool) -> void:
 func _update_hud() -> void:
 	(_ui["hp"] as Panel).anchor_right = maxf(0.0, hp / HP)
 	var d := _bear.global_position.distance_to(_world.hive_position)
-	(_ui["dist"] as Label).text = "Ест мёд!" if _eating > 0.0 else "До улья %d м" % roundi(d)
+	(_ui["dist"] as Label).text = "Ест мёд!" if _eating > 0.0 else "до улья %d м" % roundi(d)
 	if is_instance_valid(bee):
 		var to := _bear.global_position - bee.global_position
-		(_ui["tag"] as Label).text = "Медведь · %d м" % roundi(Vector2(to.x, to.z).length())
+		(_ui["tag"] as Label).text = "Медведь, %d м" % roundi(Vector2(to.x, to.z).length())
 		_game.ui.point_arrow(_ui["arrow"], to)
 
 
@@ -248,7 +263,8 @@ func _finish(won: bool, gave_up := false) -> void:
 		"body": body,
 		"record": "",
 		"honey": honey,
-		"footer": "Побед над медведем: %d из %d" % [p.bear_wins, p.bear_games],
+		"footer": "Побед над медведем %d из %d" % [p.bear_wins, p.bear_games],
+		"won": won,
 	})
 	if is_instance_valid(bee):
 		bee.queue_free()

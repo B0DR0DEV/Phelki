@@ -9,20 +9,16 @@ var grandmas_bed := false
 
 var _head: Node3D
 var _head_scale := Vector3.ONE
-var _petals: Array[MeshInstance3D] = []
-var _petal_materials: Array[Material] = []
 var _pollen := 0.0
 var _max := 6.0
 var _rare_said := false
+var _sparkle: CPUParticles3D
 
 
-func init(head: Node3D, petals: Array[MeshInstance3D], grandmas: bool) -> void:
+func init(head: Node3D, grandmas: bool) -> void:
 	_head = head
 	_head_scale = head.scale
 	grandmas_bed = grandmas
-	for p in petals:
-		_petals.append(p)
-		_petal_materials.append(p.material_override)
 
 
 func head_pos() -> Vector3:
@@ -39,8 +35,13 @@ func prepare(is_blooming: bool, is_rare: bool) -> void:
 	_max = 20.0 if rare else 6.0
 	_pollen = _max if blooming else 0.0
 	_rare_said = false
-	for i in _petals.size():
-		_petals[i].material_override = Shape.mat(Palette.GOLD, 0.3) if rare else _petal_materials[i]
+	for mi in _head.get_children():
+		if mi is MeshInstance3D:
+			(mi as MeshInstance3D).material_override = Shape.mat(Palette.GOLD.lightened(0.2), 0.2) if rare else Shape.mat(Color.WHITE)
+	if rare and _sparkle == null:
+		_sparkle = Fx.sparkle(_head)
+	if _sparkle:
+		_sparkle.emitting = rare
 
 
 func take(amount: int) -> int:
@@ -59,7 +60,7 @@ func _process(delta: float) -> void:
 		_pollen = minf(_max, _pollen + (0.6 if rare else 0.35) * delta)
 	if _head == null:
 		return
-	var fill := lerpf(0.5, 1.0, _pollen / maxf(1.0, _max)) if blooming else 0.4
+	var fill := lerpf(0.55, 1.0, _pollen / maxf(1.0, _max)) if blooming else 0.45
 	if rare:
 		fill *= 1.35
 		if blooming:

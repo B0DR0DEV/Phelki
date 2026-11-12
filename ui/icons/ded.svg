@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none" stroke="#2b1d14" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+<path d="M40 256 Q44 196 128 188 Q212 196 216 256 Z" fill="#fbf6ea"/>
+<path d="M58 222 Q128 206 198 222 M48 246 Q128 232 208 246" stroke="#3c5f9a" stroke-width="12"/>
+<ellipse cx="128" cy="132" rx="70" ry="76" fill="#e3a07a"/>
+<ellipse cx="56" cy="138" rx="14" ry="20" fill="#e3a07a"/><ellipse cx="200" cy="138" rx="14" ry="20" fill="#e3a07a"/>
+<path d="M50 92 Q52 40 128 36 Q206 40 208 92 Q206 104 190 98 Q128 80 66 98 Q50 104 50 92 Z" fill="#6d6457"/>
+<path d="M60 96 Q30 104 34 120 Q60 116 88 104" fill="#5a5247"/>
+<path d="M82 112 Q100 100 116 112" stroke-width="14"/><path d="M140 112 Q156 100 174 112" stroke-width="14"/>
+<circle cx="100" cy="130" r="8" fill="#2b1d14" stroke="none"/><circle cx="156" cy="130" r="8" fill="#2b1d14" stroke="none"/>
+<ellipse cx="128" cy="152" rx="18" ry="16" fill="#d9805a"/>
+<path d="M128 166 Q96 162 78 186 Q100 192 128 176 Q156 192 178 186 Q160 162 128 166 Z" fill="#fbf6ea"/>
+<path d="M112 194 Q128 202 144 194" stroke-width="8"/></svg>

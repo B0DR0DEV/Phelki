@@ -545,15 +545,15 @@ func s_match_over(result: Dictionary) -> void:
 		"title": "Победа!" if i_won else "Поражение",
 		"big": ("Дачники уехали" if humans_won else "Пчёлы победили"),
 		"color": UiKit.DEEP_HONEY if i_won else UiKit.DANGER_BG,
-		"body": "Дачников: %d · уехали %d · на скорой %d\nБанок: %d/%d\nВремя: %d с" % [
+		"body": "Дачников: %d\nУехали: %d, на скорой: %d\nБанок: %d из %d\nВремя: %d с" % [
 			result.get("humans_total", 0), result.get("humans_escaped", 0), result.get("humans_fainted", 0),
 			result.get("jars", 0), result.get("jars_needed", 0), roundi(result.get("time", 0.0))],
-		"footer": "Следующий матч начнётся сам — останься в комнате",
+		"footer": "Следующий матч начнётся сам",
 		"again": "",
+		"won": i_won,
 	})
-	var stay := UiKit.button(game.ui.current_screen(), "В комнату", 0.06, 0.07, 0.6, 0.17, UiKit.HONEY_BG, UiKit.INK,
-		func(): show_lobby(), 54)
-	stay.name = "В комнату"
+	UiKit.button(game.ui.current_screen(), "В комнату", 0.06, 0.07, 0.6, 0.17, UiKit.HONEY_BG, UiKit.INK,
+		func(): show_lobby(), 50)
 
 
 func _clear_proxies() -> void:
@@ -613,43 +613,50 @@ func show_menu() -> void:
 	var game := Game.I
 	var ui := game.ui
 	var s := ui.new_screen("Онлайн")
-	ui.place_say(0.81, 0.895)
-	UiKit.panel(s, 0, 0, 1, 1, Color(0, 0, 0, 0.5), 0)
-	var card := UiKit.panel(s, 0.06, 0.25, 0.94, 0.78, UiKit.CARD_BG, 30)
-	UiKit.label(card, "Онлайн-охота", 64, 0.05, 0.86, 0.95, 0.97, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, true, false)
+	ui.place_say(0.83, 0.92)
+	UiKit.panel(s, 0, 0, 1, 1, Color(0, 0, 0, 0.35), 0)
+	var card := UiKit.sticker(s, 0.06, 0.24, 0.94, 0.8, UiKit.PAPER, 34, -1.0, "Онлайн", 10)
+	UiKit.image(card, UiKit.icon("online"), 0.38, 0.8, 0.62, 0.98)
+	UiKit.label(card, "Онлайн-охота", 46, 0.05, 0.7, 0.95, 0.8, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false, true)
 	var side := "пчела" if Profile.current().side == Profile.Side.BEE else "дачник"
-	UiKit.label(card, "Дачники против пчёл, до 4 + 16 игроков. Пустые места займут боты. Ты — %s." % side, 32,
-		0.06, 0.68, 0.94, 0.85, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false)
-	UiKit.label(card, "Адрес сервера или комнаты:", 30, 0.06, 0.6, 0.94, 0.67, HORIZONTAL_ALIGNMENT_LEFT, UiKit.INK, false, false)
+	UiKit.label(card, "Дачники против пчёл, до 4 и 16 игроков. Пустые места займут боты. Ты — %s." % side, 30,
+		0.07, 0.56, 0.93, 0.7)
 	var field := LineEdit.new()
 	field.text = DEFAULT_SERVER
-	field.placeholder_text = "например 192.168.1.5"
-	field.add_theme_font_size_override("font_size", UiKit.px(40))
-	UiKit.place(field, 0.06, 0.48, 0.94, 0.6)
+	field.placeholder_text = "адрес, например 192.168.1.5"
+	field.add_theme_font_override("font", UiKit.bold())
+	field.add_theme_font_size_override("font_size", UiKit.px(36))
+	field.add_theme_color_override("font_color", UiKit.INK)
+	field.add_theme_color_override("font_placeholder_color", Color(UiKit.INK, 0.45))
+	field.add_theme_stylebox_override("normal", UiKit.box_style(Color.WHITE, 18, 4))
+	field.add_theme_stylebox_override("focus", UiKit.box_style(Color.WHITE, 18, 5))
+	field.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.place(field, 0.07, 0.43, 0.93, 0.53)
 	card.add_child(field)
-	UiKit.button(card, "Подключиться", 0.06, 0.33, 0.94, 0.46, UiKit.HONEY_BG, UiKit.INK,
-		func(): connect_to(field.text.strip_edges()), 48)
+	UiKit.button(card, "Подключиться", 0.07, 0.29, 0.93, 0.4, UiKit.HONEY_BG, UiKit.INK,
+		func(): connect_to(field.text.strip_edges()), 44)
 	if not OS.has_feature("web"):
-		UiKit.button(card, "Создать комнату (Wi-Fi)", 0.06, 0.18, 0.94, 0.31, UiKit.DANGER_BG, Color.WHITE,
-			func(): host_lan(), 42)
-	UiKit.label(card, status, 28, 0.06, 0.04, 0.94, 0.16, HORIZONTAL_ALIGNMENT_CENTER, UiKit.DANGER_BG, false, false)
-	UiKit.button(s, "Назад", 0.3, 0.1, 0.7, 0.18, UiKit.MUTED, Color.WHITE, func(): disconnect_all(); game.show_hub(), 44)
+		UiKit.button(card, "Комната по Wi-Fi", 0.07, 0.15, 0.93, 0.26, UiKit.BERRY, UiKit.PAPER,
+			func(): host_lan(), 40)
+	UiKit.label(card, status, 26, 0.07, 0.02, 0.93, 0.13, HORIZONTAL_ALIGNMENT_CENTER, UiKit.BERRY, true)
+	UiKit.button(s, "Назад", 0.3, 0.1, 0.7, 0.18, UiKit.PAPER, UiKit.INK, func(): disconnect_all(); game.show_hub(), 40, false, "home")
 
 
 func show_lobby() -> void:
 	var ui := Game.I.ui
 	var s := ui.new_screen("Комната")
-	ui.place_say(0.81, 0.895)
-	UiKit.panel(s, 0, 0, 1, 1, Color(0, 0, 0, 0.45), 0)
-	var card := UiKit.panel(s, 0.06, 0.3, 0.94, 0.75, UiKit.CARD_BG, 30)
-	UiKit.label(card, "Комната", 64, 0.05, 0.82, 0.95, 0.96, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, true, false)
-	_ui["lobby"] = UiKit.label(card, status, 40, 0.06, 0.45, 0.94, 0.8, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false)
+	ui.place_say(0.83, 0.92)
+	UiKit.panel(s, 0, 0, 1, 1, Color(0, 0, 0, 0.35), 0)
+	var card := UiKit.sticker(s, 0.06, 0.3, 0.94, 0.76, UiKit.PAPER, 34, 1.0, "Комната", 10)
+	UiKit.label(card, "Комната", 46, 0.05, 0.82, 0.95, 0.96, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false, true)
+	_ui["lobby"] = UiKit.label(card, status, 36, 0.06, 0.48, 0.94, 0.8)
 	if hosting:
 		var addrs := lan_addresses()
-		UiKit.label(card, "Друзьям в том же Wi-Fi ввести:\n" + (", ".join(addrs) if not addrs.is_empty() else "адрес этого телефона"),
-			32, 0.06, 0.22, 0.94, 0.45, HORIZONTAL_ALIGNMENT_CENTER, UiKit.DEEP_HONEY, true, false)
-		UiKit.button(card, "Начать сейчас", 0.2, 0.05, 0.8, 0.2, UiKit.HONEY_BG, UiKit.INK, func(): start_now(), 44)
-	UiKit.button(s, "Выйти", 0.3, 0.12, 0.7, 0.2, UiKit.MUTED, Color.WHITE, func(): disconnect_all(); Game.I.show_hub(), 44)
+		var addr := UiKit.sticker(card, 0.08, 0.24, 0.92, 0.45, UiKit.HONEY_BG, 18, -1.0, "Адрес", 4)
+		UiKit.label(addr, "Друзьям в том же Wi-Fi ввести\n" + (", ".join(addrs) if not addrs.is_empty() else "адрес этого телефона"),
+			30, 0.04, 0.05, 0.96, 0.95, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, true)
+		UiKit.button(card, "Начать сейчас", 0.2, 0.04, 0.8, 0.18, UiKit.LEAF, UiKit.PAPER, func(): start_now(), 36)
+	UiKit.button(s, "Выйти", 0.3, 0.12, 0.7, 0.2, UiKit.PAPER, UiKit.INK, func(): disconnect_all(); Game.I.show_hub(), 40, false, "home")
 
 
 func _update_lobby_ui(players: int, wait: float) -> void:
@@ -662,21 +669,21 @@ func _update_lobby_ui(players: int, wait: float) -> void:
 func _build_hud() -> void:
 	var ui := Game.I.ui
 	var s := ui.new_screen("Онлайн-матч")
+	Sfx.music("game")
 	ui.place_say(0.73, 0.82)
-	var top := UiKit.panel(s, 0.03, 0.9, 0.97, 0.975, UiKit.SHADE)
-	_ui["jars"] = UiKit.label(top, "", 36, 0.03, 0, 0.34, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.HONEY_BG, true)
-	_ui["time"] = UiKit.label(top, "", 60, 0.36, 0, 0.6, 1, HORIZONTAL_ALIGNMENT_CENTER, Color.WHITE, true)
-	_ui["me"] = UiKit.label(top, "", 32, 0.62, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_RIGHT, Color.WHITE, true)
-	var tag := UiKit.panel(s, 0.03, 0.845, 0.42, 0.89, UiKit.SHADE)
-	_ui["arrow"] = UiKit.arrow(tag, 0.03, 0.1, 0.17, 0.9, UiKit.HONEY_BG)
-	_ui["target"] = UiKit.label(tag, "", 30, 0.2, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, Color.WHITE, true)
+	var row := ui._top_row(s, "honey", "swatter" if _me() is Human else "bee")
+	_ui["jars"] = UiKit.label(row[0], "", 24, 0.26, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.INK, true)
+	_ui["time"] = UiKit.label(row[1], "", 40, 0, 0, 1, 1, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false, true)
+	_ui["me"] = UiKit.label(row[2], "", 26, 0.26, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.INK, true)
+	_ui["target"] = ui._target_chip(s)
+	_ui["arrow"] = ui._arrow
 	ui.view_button(s)
-	UiKit.button(s, "Выйти", 0.72, 0.845, 0.97, 0.89, UiKit.SHADE, Color.WHITE, func(): disconnect_all(); Game.I.show_hub(), 34)
+	UiKit.button(s, "Выйти", 0.72, 0.845, 0.97, 0.895, UiKit.PAPER, UiKit.INK, func(): disconnect_all(); Game.I.show_hub(), 26)
 	if _me() is Human:
-		UiKit.button(s, "Дымарь", 0.6, 0.15, 0.96, 0.24, Color(0.45, 0.55, 0.65), Color.WHITE,
-			func(): c_action.rpc_id(1, "smoke", Vector3.ZERO), 44, true)
-		UiKit.button(s, "Мухобойка", 0.6, 0.035, 0.96, 0.14, UiKit.HONEY_BG, UiKit.INK,
-			func(): c_action.rpc_id(1, "swat", Vector3.ZERO), 48, true)
+		UiKit.button(s, "Дымарь", 0.6, 0.165, 0.96, 0.255, UiKit.SKY, UiKit.INK,
+			func(): c_action.rpc_id(1, "smoke", Vector3.ZERO), 36, true, "smoke", -1.5)
+		UiKit.button(s, "Шлёп", 0.6, 0.035, 0.96, 0.145, UiKit.HONEY_BG, UiKit.INK,
+			func(): c_action.rpc_id(1, "swat", Vector3.ZERO), 44, true, "swatter", 1.5)
 
 
 func _update_hud() -> void:
@@ -685,7 +692,7 @@ func _update_hud() -> void:
 	var me := _me()
 	var secs := ceili(maxf(0.0, _header[0]))
 	(_ui["time"] as Label).text = "%d:%02d" % [secs / 60, secs % 60]
-	(_ui["jars"] as Label).text = "Банки %d/%d · дачников %d" % [int(_header[1]), int(_header[2]), int(_header[4])]
+	(_ui["jars"] as Label).text = "Банки %d из %d" % [int(_header[1]), int(_header[2])]
 	if me is Human:
 		(_ui["me"] as Label).text = "Отёк %d%%" % roundi((me as Human).swelling * 100.0)
 	else:
@@ -711,5 +718,5 @@ func _update_hud() -> void:
 		label = "Машина"
 	if label != "":
 		var d := target - me.global_position
-		(_ui["target"] as Label).text = "%s · %d м" % [label, roundi(Vector2(d.x, d.z).length())]
+		(_ui["target"] as Label).text = "%s, %d м" % [label, roundi(Vector2(d.x, d.z).length())]
 		Game.I.ui.point_arrow(_ui["arrow"], d)

@@ -74,18 +74,19 @@ func _setup() -> void:
 func _build_hud() -> void:
 	var ui := _game.ui
 	var s := ui.new_screen("Перегонки")
+	Sfx.music("game")
 	ui.place_say(0.73, 0.82)
-	var top := UiKit.panel(s, 0.03, 0.9, 0.97, 0.975, UiKit.SHADE)
-	_ui["place"] = UiKit.label(top, "", 46, 0.03, 0, 0.32, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.HONEY_BG, true)
-	_ui["time"] = UiKit.label(top, "0:00", 60, 0.34, 0, 0.66, 1, HORIZONTAL_ALIGNMENT_CENTER, Color.WHITE, true)
-	_ui["lap"] = UiKit.label(top, "", 38, 0.66, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_RIGHT, Color.WHITE, true)
-	var tag := UiKit.panel(s, 0.03, 0.845, 0.42, 0.89, UiKit.SHADE)
-	_ui["arrow"] = UiKit.arrow(tag, 0.03, 0.1, 0.17, 0.9, UiKit.HONEY_BG)
-	_ui["next"] = UiKit.label(tag, "", 32, 0.2, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, Color.WHITE, true)
+	var row := ui._top_row(s, "rings", "timer")
+	_ui["place"] = UiKit.label(row[0], "", 30, 0.26, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.INK, false, false, true)
+	_ui["lap"] = UiKit.label(row[1], "", 30, 0, 0, 1, 1, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, false, false, true)
+	_ui["time"] = UiKit.label(row[2], "0:00", 30, 0.27, 0, 0.97, 1, HORIZONTAL_ALIGNMENT_LEFT, UiKit.INK, false, false, true)
+	_ui["next"] = ui._target_chip(s)
+	_ui["arrow"] = ui._arrow
 	ui.view_button(s)
-	UiKit.button(s, "Сдаться", 0.72, 0.845, 0.97, 0.89, UiKit.SHADE, Color.WHITE, func(): give_up(), 34)
-	_ui["count"] = UiKit.label(s, "3", 220, 0.2, 0.45, 0.8, 0.65, HORIZONTAL_ALIGNMENT_CENTER, UiKit.HONEY_BG, true)
-	_ui["board"] = UiKit.label(s, "", 30, 0.04, 0.03, 0.6, 0.2, HORIZONTAL_ALIGNMENT_LEFT, Color.WHITE, false)
+	UiKit.button(s, "Сдаться", 0.72, 0.845, 0.97, 0.895, UiKit.PAPER, UiKit.INK, func(): give_up(), 26)
+	_ui["count"] = UiKit.label(s, "3", 220, 0.2, 0.45, 0.8, 0.65, HORIZONTAL_ALIGNMENT_CENTER, UiKit.HONEY_BG, false, true, true)
+	var board := UiKit.chip(s, 0.03, 0.03, 0.42, 0.22)
+	_ui["board"] = UiKit.label(board, "", 24, 0.08, 0.04, 0.95, 0.96, HORIZONTAL_ALIGNMENT_LEFT)
 
 
 func _paint_rings() -> void:
@@ -103,8 +104,13 @@ func _process(delta: float) -> void:
 	var pts := _world.race_rings
 	var count_label: Label = _ui["count"]
 	if elapsed < 0.0:
-		count_label.text = str(ceili(-elapsed))
+		var n := ceili(-elapsed)
+		if count_label.text != str(n):
+			Sfx.play("beep", -2.0, 1.0, 0.0)
+		count_label.text = str(n)
 		return
+	if count_label.text != "Лети!" and elapsed < 0.2:
+		Sfx.play("go", -2.0, 1.0, 0.0)
 	count_label.text = "Лети!" if elapsed < 1.0 else ""
 
 	for r in racers:
@@ -126,6 +132,8 @@ func _process(delta: float) -> void:
 					finish_order.append(r["name"])
 			if r["player"]:
 				_paint_rings()
+				Sfx.play("ring", -3.0, 1.0 + r["ring"] * 0.03, 0.0)
+				Fx.burst(target, Palette.GOLD, 14, 3.0, 0.12, 0.0)
 				Game.vibrate(25)
 				if r["lap"] == 1 and r["ring"] == 0:
 					_game.say("Второй круг! Жми!", 2.0)
@@ -160,13 +168,13 @@ func _update_hud() -> void:
 		if table[i]["player"]:
 			place = i + 1
 	var me := racers[0]
-	(_ui["place"] as Label).text = "Место %d/%d" % [place, racers.size()]
-	(_ui["lap"] as Label).text = "Круг %d/%d" % [mini(me["lap"] + 1, LAPS), LAPS]
+	(_ui["place"] as Label).text = "%d из %d" % [place, racers.size()]
+	(_ui["lap"] as Label).text = "Круг %d" % mini(me["lap"] + 1, LAPS)
 	var t := maxf(0.0, elapsed)
 	(_ui["time"] as Label).text = "%d:%04.1f" % [int(t) / 60, fmod(t, 60.0)]
 	var target := _world.race_rings[me["ring"]]
 	var d := target - bee.global_position
-	(_ui["next"] as Label).text = "Кольцо %d · %d м" % [me["ring"] + 1, roundi(Vector2(d.x, d.z).length())]
+	(_ui["next"] as Label).text = "Кольцо %d, %d м" % [me["ring"] + 1, roundi(Vector2(d.x, d.z).length())]
 	_game.ui.point_arrow(_ui["arrow"], d)
 	var lines := PackedStringArray()
 	for i in table.size():
@@ -211,7 +219,8 @@ func _finish(gave_up := false) -> void:
 		"body": body,
 		"record": "Рекорд карты!" if record else "",
 		"honey": honey,
-		"footer": "+%d мёда · побед: %d" % [honey, p.race_wins],
+		"footer": "+%d мёда, побед в гонках %d" % [honey, p.race_wins],
+		"won": place == 1,
 	})
 	if is_instance_valid(bee):
 		bee.queue_free()

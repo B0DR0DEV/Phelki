@@ -16,6 +16,8 @@ func _physics_process(_delta: float) -> void:
 		return
 	_ready_at = Game.clock + 6.0
 	bee.stick(2.2)
+	Sfx.play("jam")
+	Fx.burst(bee.global_position, Palette.JAM, 8, 1.5, 0.1)
 	bee.add_pollen(3, true)
 	game.say(Lines.pick(Lines.JAM))
 	game.toast("Прилипла! +3 сладкой пыльцы")

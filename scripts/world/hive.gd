@@ -33,9 +33,12 @@ func _physics_process(_delta: float) -> void:
 	var honey := p + (BIG_BONUS if big else 0)
 	game.stats.honey_made += honey
 	game.stats.deposits += 1
-	game.toast("+%d мёда · бонус деда!" % honey if big else "+%d мёда" % honey)
+	game.toast("+%d мёда, бонус деда!" % honey if big else "+%d мёда" % honey)
 	game.say(Lines.pick(Lines.BIG_DEPOSIT if big else Lines.DEPOSIT))
 	_pulse = 1.0
+	Sfx.play("big_chime" if big else "chime", -2.0, 1.0, 0.0)
+	Fx.burst(global_position + Vector3(0, 1.3, -0.6), Palette.HONEY, 18 if big else 10, 3.0, 0.14)
+	Game.vibrate(30)
 
 
 func _process(delta: float) -> void:

@@ -69,11 +69,13 @@ func _setup() -> void:
 func _build_hud() -> void:
 	var ui := _game.ui
 	var s := ui.new_screen("Флаппи")
+	Sfx.music("game")
 	ui.place_say(0.73, 0.82)
-	_ui["score"] = UiKit.label(s, "0", 140, 0.2, 0.82, 0.8, 0.96, HORIZONTAL_ALIGNMENT_CENTER, Color.WHITE, true)
-	_ui["best"] = UiKit.label(s, "Рекорд: %d" % Profile.current().flappy_best, 34, 0.2, 0.78, 0.8, 0.83, HORIZONTAL_ALIGNMENT_CENTER, Color.WHITE)
-	_ui["hint"] = UiKit.label(s, "Тапай по экрану — пчела взлетает", 46, 0.08, 0.3, 0.92, 0.4, HORIZONTAL_ALIGNMENT_CENTER, UiKit.HONEY_BG, true)
-	UiKit.button(s, "Выйти", 0.72, 0.9, 0.97, 0.95, UiKit.SHADE, Color.WHITE, func(): give_up(), 34)
+	_ui["score"] = UiKit.label(s, "0", 150, 0.2, 0.8, 0.8, 0.95, HORIZONTAL_ALIGNMENT_CENTER, UiKit.PAPER, false, true, true)
+	var best := UiKit.chip(s, 0.32, 0.745, 0.68, 0.79)
+	_ui["best"] = UiKit.label(best, "рекорд %d" % Profile.current().flappy_best, 26, 0.04, 0, 0.96, 1, HORIZONTAL_ALIGNMENT_CENTER, UiKit.INK, true)
+	_ui["hint"] = UiKit.label(s, "Тапай — пчела взлетает", 46, 0.06, 0.3, 0.94, 0.4, HORIZONTAL_ALIGNMENT_CENTER, UiKit.HONEY_BG, false, true, true)
+	UiKit.button(s, "Выйти", 0.72, 0.915, 0.97, 0.965, UiKit.PAPER, UiKit.INK, func(): give_up(), 26, false, "home")
 
 
 func _spawn_obstacle() -> void:
@@ -111,6 +113,7 @@ func flap() -> void:
 		started = true
 		(_ui["hint"] as Label).text = ""
 	_vy = FLAP
+	Sfx.play("flap", -4.0, 1.1)
 
 
 func _process(delta: float) -> void:
@@ -135,6 +138,7 @@ func _process(delta: float) -> void:
 		if not o["passed"] and o["x"] < _x:
 			o["passed"] = true
 			score += 1
+			Sfx.play("pop", -6.0, 1.0 + minf(score, 40) * 0.01, 0.0)
 			(_ui["score"] as Label).text = str(score)
 			if score % 10 == 0:
 				_game.say(["Во даёт!", "Уважаю такую пчелу!", "Ещё чуть-чуть!"][randi() % 3], 1.5)
@@ -160,6 +164,8 @@ func _die() -> void:
 		return
 	dead = true
 	_dead_at = Game.clock
+	Sfx.play("thud")
+	Fx.stars(_bee.global_position)
 	_vy = -4.0
 	Game.vibrate(80)
 	_game.say(["Бум! Об забор.", "Эх, трубу не заметила.", "Ну кто так летает..."][randi() % 3], 2.0)
@@ -184,5 +190,6 @@ func _end() -> void:
 		"body": "Пролетела препятствий: %d\nРекорд: %d" % [score, p.flappy_best],
 		"record": "Новый рекорд!" if record else "",
 		"honey": score / 5,
-		"footer": "+%d мёда (1 за каждые 5 препятствий)" % (score / 5),
+		"footer": "+%d мёда, по одному за каждые 5" % (score / 5),
+		"won": record,
 	})

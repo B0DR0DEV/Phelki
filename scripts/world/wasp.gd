@@ -101,6 +101,7 @@ func _touch(bee: Bee) -> void:
 		_carried += stolen
 		game.stats.pollen_stolen += stolen
 		game.say(Lines.pick(Lines.WASP_STEAL))
+		Sfx.play("steal")
 		game.toast("Осы отжали %d пыльцы" % stolen)
 	var away := bee.global_position - global_position
 	away.y = 0.0
@@ -114,6 +115,8 @@ func _stun(hit: Vector3) -> void:
 	_cooldown_until = _stun_until + 1.0
 	velocity = hit * 0.6 + Vector3.UP * 2.0
 	game.stats.wasps_rammed += 1
+	Sfx.play("slap")
+	Fx.stars(global_position)
 	game.say(Lines.pick(Lines.WASP_STUN))
 	if _carried > 0:
 		PollenPickup.scatter(global_position, _carried, true)

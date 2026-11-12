@@ -180,6 +180,9 @@ func _handle_collisions(before: Vector3) -> void:
 	if pollen > 0:
 		drop_pollen(maxi(1, roundi(pollen * 0.25)))
 	_visual.tumble()
+	Fx.stars(global_position)
+	if local_control:
+		Sfx.play("thud")
 	Game.I.say(Lines.pick(Lines.CRASH))
 	if local_control:
 		Game.vibrate(40)
@@ -199,6 +202,10 @@ func _collect(delta: float) -> void:
 	var got := current_flower.take(mini(want, CAPACITY - pollen))
 	if got > 0:
 		add_pollen(got, true)
+		if local_control:
+			Sfx.play("pop", -8.0, 0.9 + load_fraction() * 0.5)
+		if randf() < 0.35:
+			Fx.burst(current_flower.head_pos() + Vector3(0, 0.1, 0), Palette.GOLD, 4, 1.2, 0.08, -1.5)
 
 
 func dash(dir: Vector3) -> void:
@@ -209,6 +216,8 @@ func dash(dir: Vector3) -> void:
 	_dash_ready_at = Game.clock + DASH_COOLDOWN
 	_stuck_until = 0.0
 	_visual.dash()
+	if local_control:
+		Sfx.play("whoosh", -4.0)
 
 
 # ── Пыльца ─────────────────────────────────────────────────

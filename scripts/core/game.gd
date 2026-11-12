@@ -71,6 +71,10 @@ func _ready() -> void:
 		add_child(t)
 
 
+func _exit_tree() -> void:
+	BeeVisual.free_templates()
+
+
 func _build_world(id: String) -> void:
 	if world:
 		remove_child(world)

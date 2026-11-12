@@ -132,6 +132,8 @@ func dodge(dir: Vector3) -> void:
 	_dodge_ready_at = Game.clock + DODGE_COOLDOWN
 	facing = atan2(dir.x, dir.z)
 	_visual.roll(DODGE_TIME)
+	if local_control:
+		Sfx.play("whoosh", -6.0, 0.8)
 	var m := _match()
 	if m:
 		m.stats.dodges += 1
@@ -145,6 +147,7 @@ func swat() -> void:
 		return
 	_swat_ready_at = Game.clock + SWAT_COOLDOWN
 	_visual.swing()
+	Sfx.play("whoosh", -8.0, 1.4)
 
 	var fwd := Vector3(sin(facing), 0.0, cos(facing))
 	var chest := global_position + Vector3(0, 1.3, 0)
@@ -173,6 +176,9 @@ func swat() -> void:
 			pb.knock(flat.normalized() * 7.0, 2.0)
 			hits += 1
 
+	if hits > 0:
+		Sfx.play("slap")
+		Fx.stars(chest + fwd * 1.2)
 	if hits > 0 and m.is_local(self):
 		m.stats.swats += hits
 		Game.I.toast("Шлёп!" if hits == 1 else "Шлёп ×%d!" % hits)
@@ -186,6 +192,7 @@ func smoke() -> void:
 		return
 	_smoke_ready_at = Game.clock + SMOKE_COOLDOWN
 	SmokeCloud.spawn(m, global_position + Vector3(0, 1.2, 0))
+	Sfx.play("puff")
 	var slept := 0
 	for bot in m.bots:
 		if is_instance_valid(bot) and bot.global_position.distance_to(global_position) <= SMOKE_RADIUS:
@@ -212,6 +219,7 @@ func try_sting() -> bool:
 	if m:
 		m.on_stung(self)
 	_visual.flinch()
+	Sfx.play("sting", -3.0 if m and m.is_local(self) else -12.0)
 	if m and m.is_local(self):
 		Game.I.cam.shake(0.25)
 		Game.vibrate(60)

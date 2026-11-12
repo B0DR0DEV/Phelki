@@ -38,6 +38,9 @@ const MAPS := {"dacha": "Дача", "yard": "Двор", "field": "Поле по�
 const MAP_ORDER := ["dacha", "yard", "field"]
 
 var map_id := "dacha"
+var _grass_color := Palette.GRASS
+var _grass_zones: Array = []  # [центр, радиус] — где растёт трава (пусто — везде на участке)
+var _no_grass: Array = []  # [центр, радиус] — где травы нет (дорожки, клумбы, постройки)
 var race_rings: Array[Vector3] = []  # кольца перегонок (по порядку, круг замкнут)
 var bear_path: Array[Vector3] = []  # путь медведя к улью
 var open_points: Array[Vector3] = []  # свободные места (для ботов)
@@ -55,6 +58,9 @@ func build(id := "dacha") -> void:
 		_:
 			_map_dacha()
 	_build_bounds()
+	_build_horizon()
+	Shape.bake_static(self)
+	_build_grass()
 	open_points.clear()
 	for p in jar_spots:
 		open_points.append(p)
@@ -75,13 +81,17 @@ func random_open_point() -> Vector3:
 # ── Карта 1: Дача ──────────────────────────────────────────
 
 func _map_dacha() -> void:
-	_setup_environment(Vector3(-48, 145, 0), Color(1.0, 0.95, 0.85), 1.0, Color(0.38, 0.62, 0.92), Color(0.78, 0.88, 0.96))
+	_setup_environment(Vector3(-42, 150, 0), Color(1.0, 0.93, 0.8), 1.05, Color("5aa6dc"), Color("d4ecf3"))
 	_build_ground(Palette.GRASS, Palette.GRASS_DARK)
-	Shape.make(Shape.BOX, self, Vector3(0, 0.01, -12), Vector3(2.2, 0.02, 24), Palette.PATH, false, "Дорожка")
-	Shape.make(Shape.BOX, self, Vector3(-8, 0.012, 9), Vector3(16, 0.02, 2), Palette.PATH, false, "Дорожка")
+	_build_path(Vector3(0, 0, -12), Vector2(2.2, 24))
+	_build_path(Vector3(-8, 0, 9), Vector2(16, 2))
 	_build_fence()
 
 	_build_hive(hive_position)
+	# Пасека деда: ещё несколько расписных ульев рядом
+	_build_hive_decor(Vector3(-3.2, 0, 2.2), Palette.HIVE_GREEN, 20.0)
+	_build_hive_decor(Vector3(3.4, 0, 2.6), Palette.HIVE_YELLOW, -15.0)
+	_build_hive_decor(Vector3(0.2, 0, 4.4), Palette.ROOF.lightened(0.15), 5.0)
 	_build_house(Vector3(-15, 0, 13))
 	_build_greenhouse(Vector3(13, 0, 10))
 
@@ -119,8 +129,10 @@ func _map_dacha() -> void:
 # ── Карта 2: Двор (хрущёвки, гаражи, площадка) ─────────────
 
 func _map_yard() -> void:
-	_setup_environment(Vector3(-22, 120, 0), Color(1.0, 0.72, 0.5), 1.05, Color(0.42, 0.45, 0.75), Color(0.98, 0.72, 0.6))
-	_build_ground(Color(0.42, 0.42, 0.44), Color(0.36, 0.55, 0.3), true)
+	_setup_environment(Vector3(-24, 118, 0), Color(1.0, 0.76, 0.55), 1.1, Color("6c78b8"), Color("f6c39a"))
+	_build_ground(Color("8b8a86"), Color("7a7975"), true)
+	_grass_color = Color("7aa548")
+	_grass_zones = [[Vector3(-10, 0, -8), 9.0], [Vector3(9, 0, 6), 9.0], [Vector3(-12, 0, 12), 7.0], [Vector3(10, 0, -16), 7.0], [Vector3(0, 0, 0), 5.0]]
 	_build_hive(hive_position)
 
 	_build_khrushchevka(Vector3(0, 0, 27), 48.0, 0.0)
@@ -151,11 +163,15 @@ func _map_yard() -> void:
 # ── Карта 3: Поле подсолнухов ──────────────────────────────
 
 func _map_field() -> void:
-	_setup_environment(Vector3(-62, 160, 0), Color(1.0, 0.98, 0.9), 1.1, Color(0.3, 0.58, 0.95), Color(0.85, 0.92, 0.98))
-	_build_ground(Color(0.62, 0.72, 0.3), Color(0.55, 0.62, 0.25))
+	_setup_environment(Vector3(-58, 160, 0), Color(1.0, 0.97, 0.86), 1.1, Color("4d9be0"), Color("e3f0ee"))
+	_build_ground(Color("a3b04a"), Color("8c9a3c"))
+	_grass_color = Color("a7b04c")
 	_build_fence()
 	_build_hive(hive_position)
-	Shape.make(Shape.BOX, self, Vector3(0, 0.01, -14), Vector3(3, 0.02, 28), Color(0.7, 0.6, 0.45), false, "Колея")
+	_build_hive_decor(Vector3(-3, 0, 2.5), Palette.HIVE_BLUE, 12.0)
+	_build_hive_decor(Vector3(3, 0, 2.5), Palette.HIVE_GREEN, -8.0)
+	_build_path(Vector3(-1.2, 0, -14), Vector2(0.8, 28), Color("b39469"))
+	_build_path(Vector3(1.2, 0, -14), Vector2(0.8, 28), Color("b39469"))
 
 	for row in 4:
 		for col in 2:
@@ -198,27 +214,36 @@ func _setup_environment(sun_rot: Vector3, sun_color: Color, sun_energy: float, s
 	sun.light_color = sun_color
 	sun.light_energy = sun_energy
 	sun.shadow_enabled = true
+	sun.shadow_bias = 0.04
+	sun.directional_shadow_max_distance = 40.0
 	add_child(sun)
 
 	var sky_mat := ProceduralSkyMaterial.new()
 	sky_mat.sky_top_color = sky_top
 	sky_mat.sky_horizon_color = horizon
+	sky_mat.sky_curve = 0.12
 	sky_mat.ground_horizon_color = horizon
-	sky_mat.ground_bottom_color = Color(0.35, 0.5, 0.3)
+	sky_mat.ground_bottom_color = horizon.darkened(0.2)
+	sky_mat.sun_angle_max = 12.0
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.45
-	env.ambient_light_sky_contribution = 0.6
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	# Тени не чёрные, а с оттенком неба — как на детской иллюстрации
+	env.ambient_light_color = sky_top.lerp(Color("b9a3c9"), 0.45)
+	env.ambient_light_energy = 0.4
 	env.fog_enabled = true
 	env.fog_light_color = horizon
-	env.fog_density = 0.003
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.tonemap_exposure = 0.85
+	env.fog_density = 0.0045
+	env.fog_sky_affect = 0.0
+	env.tonemap_mode = Environment.TONE_MAPPER_LINEAR
+	env.tonemap_exposure = 0.92
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 0.96
+	env.adjustment_contrast = 1.04
 
 	var we := WorldEnvironment.new()
 	we.name = "Небо"
@@ -227,40 +252,90 @@ func _setup_environment(sun_rot: Vector3, sun_color: Color, sun_energy: float, s
 
 
 func _build_ground(color: Color, patch: Color, asphalt := false) -> void:
-	Shape.make(Shape.BOX, self, Vector3(0, -0.5, 0), Vector3(HALF * 2 + 40, 1, HALF * 2 + 40), color, true, "Земля")
-	# Пятна потемнее; каждое чуть выше предыдущего, чтобы не мерцали
-	for i in 26:
-		var p := Vector3(_rand(-HALF, HALF), 0.004 + i * 0.0003, _rand(-HALF, HALF))
-		var s := _rand(3, 7)
-		Shape.make(Shape.CYLINDER, self, p, Vector3(s, 0.005, s * _rand(0.6, 1.0)), patch, false, "Пятно")
+	# Земля — сетка с цветом в вершинах: пятна травы светлее и темнее
+	var size := HALF * 2 + 120.0
+	var n := 56
+	var noise := FastNoiseLite.new()
+	noise.seed = 7
+	noise.frequency = 0.045
+	var v := PackedVector3Array()
+	var nn := PackedVector3Array()
+	var c := PackedColorArray()
+	var idx := PackedInt32Array()
+	for zi in n + 1:
+		for xi in n + 1:
+			var x := -size / 2 + size * xi / n
+			var z := -size / 2 + size * zi / n
+			v.append(Vector3(x, 0, z))
+			nn.append(Vector3.UP)
+			var k := clampf(noise.get_noise_2d(x, z) * 1.6 + 0.5, 0.0, 1.0)
+			var col := color.lerp(patch, k)
+			# За забором трава чуть темнее и холоднее — участок «светится»
+			if absf(x) > HALF + 1.0 or absf(z) > HALF + 1.0:
+				col = col.lerp(Palette.GRASS_DARK.darkened(0.1), 0.5) if not asphalt else Palette.GRASS_DARK
+			c.append(col)
+	for zi in n:
+		for xi in n:
+			var a := zi * (n + 1) + xi
+			idx.append_array([a, a + 1, a + n + 1, a + 1, a + n + 2, a + n + 1])
+	var mi := MeshInstance3D.new()
+	mi.name = "Земля"
+	mi.mesh = Shape._commit(v, nn, c, idx)
+	mi.material_override = Shape.mat(Color.WHITE, 0.85, 0.0)
+	add_child(mi)
+	Shape.box_body(self, Vector3(0, -0.5, 0), Vector3(size, 1, size))
 	if asphalt:
-		# Разметка парковки и бордюры
+		# Двор: асфальт с разметкой, бордюры, газоны
 		for i in 6:
-			Shape.make(Shape.BOX, self, Vector3(-4 + i * 4, 0.02, -27), Vector3(0.12, 0.01, 4), Palette.WHITE, false, "Разметка")
-		Shape.make(Shape.BOX, self, Vector3(0, 0.08, -24.5), Vector3(40, 0.16, 0.3), Color(0.7, 0.7, 0.68), false, "Бордюр")
+			Shape.make(Shape.BOX, self, Vector3(-4 + i * 4, 0.015, -27), Vector3(0.14, 0.02, 4), Palette.WHITE, false, "Разметка")
+		Shape.make(Shape.BOX, self, Vector3(0, 0.09, -24.5), Vector3(40, 0.18, 0.32), Color("c9c6bd"), false, "Бордюр")
+		for z in _grass_zones:
+			Shape.make(Shape.CYLINDER, self, z[0] + Vector3(0, 0.02, 0), Vector3(z[1] * 2, 0.03, z[1] * 2), Color("6f9a40"), false, "Газон")
 
 
 func _build_fence() -> void:
+	# Штакетник: столбы, две поперечины и частые доски с закруглённым верхом
 	var fence := Shape.node("Забор", self)
-	var x := -HALF
-	while x <= HALF + 0.01:
-		_fence_post(fence, Vector3(x, 0, -HALF))
-		_fence_post(fence, Vector3(x, 0, HALF))
-		x += 4.0
-	var z := -HALF + 4.0
-	while z < HALF:
-		_fence_post(fence, Vector3(-HALF, 0, z))
-		_fence_post(fence, Vector3(HALF, 0, z))
-		z += 4.0
-	for y in [0.45, 0.95]:
-		Shape.make(Shape.BOX, fence, Vector3(0, y, -HALF), Vector3(HALF * 2, 0.1, 0.08), Palette.WOOD)
-		Shape.make(Shape.BOX, fence, Vector3(0, y, HALF), Vector3(HALF * 2, 0.1, 0.08), Palette.WOOD)
-		Shape.make(Shape.BOX, fence, Vector3(-HALF, y, 0), Vector3(0.08, 0.1, HALF * 2), Palette.WOOD)
-		Shape.make(Shape.BOX, fence, Vector3(HALF, y, 0), Vector3(0.08, 0.1, HALF * 2), Palette.WOOD)
+	var paint := Color("e9dcc0")
+	for side in 4:
+		var horizontal := side < 2
+		var fixed := -HALF if side % 2 == 0 else HALF
+		var t := -HALF
+		while t <= HALF + 0.01:
+			var p := Vector3(t, 0, fixed) if horizontal else Vector3(fixed, 0, t)
+			_fence_post(fence, p)
+			t += 4.0
+		for y in [0.38, 0.92]:
+			var sz := Vector3(HALF * 2, 0.08, 0.06) if horizontal else Vector3(0.06, 0.08, HALF * 2)
+			Shape.make(Shape.BOX, fence, (Vector3(0, y, fixed) if horizontal else Vector3(fixed, y, 0)) + (Vector3(0, 0, 0.06) if horizontal else Vector3(0.06, 0, 0)) * -signf(fixed),
+				sz, Palette.WOOD, false, "Поперечина")
+		var k := -HALF + 0.3
+		while k < HALF:
+			var off := Vector3(0, 0, 0.12) if horizontal else Vector3(0.12, 0, 0)
+			var pos := (Vector3(k, 0.62, fixed) if horizontal else Vector3(fixed, 0.62, k)) - off * signf(fixed)
+			# Ворота дачи остаются открытыми — там стоит машина
+			if not (side == 0 and absf(k) < 3.0 and map_id != "field"):
+				Shape.make(Shape.BOX, fence, pos, Vector3(0.13, 1.2, 0.05) if horizontal else Vector3(0.05, 1.2, 0.13),
+					paint.lerp(paint.darkened(0.12), _rng.randf()), false, "Штакетина")
+			k += 0.6
+
+
+func _build_path(center: Vector3, size: Vector2, color := Palette.PATH) -> void:
+	Shape.make(Shape.BOX, self, center + Vector3(0, 0.02, 0), Vector3(size.x, 0.04, size.y), color, false, "Дорожка")
+	# Камушки по краям
+	var count := int(maxf(size.x, size.y) / 1.3)
+	for i in count:
+		var t := (i + 0.5) / count
+		var along := Vector3((t - 0.5) * size.x, 0, 0) if size.x > size.y else Vector3(0, 0, (t - 0.5) * size.y)
+		var side := Vector3(0, 0, size.y * 0.5 + 0.15) if size.x > size.y else Vector3(size.x * 0.5 + 0.15, 0, 0)
+		for sg in [-1.0, 1.0]:
+			Shape.make(Shape.SPHERE, self, center + along + side * sg + Vector3(0, 0.05, 0), Vector3(0.28, 0.16, 0.24) * _rand(0.8, 1.2),
+				Color("c8bfae").lerp(Color("a89e8c"), _rng.randf()), false, "Камушек")
+	_no_grass.append([center, maxf(size.x, size.y) * 0.5, Vector2(size.x * 0.5 + 0.4, size.y * 0.5 + 0.4)])
 
 
 func _fence_post(parent: Node3D, p: Vector3) -> void:
-	Shape.make(Shape.BOX, parent, p + Vector3(0, 0.6, 0), Vector3(0.14, 1.2, 0.14), Palette.WOOD)
+	Shape.make(Shape.BOX, parent, p + Vector3(0, 0.65, 0), Vector3(0.16, 1.3, 0.16), Palette.WOOD.darkened(0.1), false, "Столб")
 
 
 func _build_bounds() -> void:
@@ -283,66 +358,117 @@ func _build_hive(pos: Vector3) -> void:
 	hive.position = pos
 	add_child(hive)
 	var body := Shape.node("Корпус", hive)
-
 	var scene := Shape.art("hive")
 	if scene:
 		Shape.place_art(scene, body, Vector3.ZERO, 180.0)
 	else:
-		for lp in [Vector3(-0.5, 0.15, -0.4), Vector3(0.5, 0.15, -0.4), Vector3(-0.5, 0.15, 0.4), Vector3(0.5, 0.15, 0.4)]:
-			Shape.make(Shape.BOX, body, lp, Vector3(0.1, 0.3, 0.1), Palette.WOOD, false, "Ножка")
-		var tiers := [Palette.WOOD_LIGHT, Color(0.98, 0.82, 0.45), Palette.WOOD_LIGHT]
-		for i in 3:
-			Shape.make(Shape.BOX, body, Vector3(0, 0.49 + i * 0.38, 0), Vector3(1.2, 0.36, 1.0), tiers[i], false, "Корпус %d" % (i + 1))
-		Shape.make(Shape.BOX, body, Vector3(0, 1.5, 0), Vector3(1.4, 0.12, 1.2), Palette.ROOF, false, "Крыша")
-		Shape.make(Shape.BOX, body, Vector3(0, 0.38, -0.51), Vector3(0.6, 0.06, 0.04), Palette.BLACK, false, "Леток")
-		Shape.make(Shape.BOX, body, Vector3(0, 0.33, -0.62), Vector3(0.7, 0.03, 0.22), Palette.WOOD, false, "Прилётная доска")
+		_paint_hive(body, Palette.HIVE_BLUE, true)
 		# Твёрдое тело ниже высоты полёта — над ульем можно пролететь
 		Shape.box_body(hive, Vector3(0, 0.8, 0), Vector3(1.2, 1.25, 1.0))
 	hive.init(body)
 
 
+## Расписной улей: корпус, крыша-домик, леток с прилётной доской, номер.
+func _paint_hive(root: Node3D, color: Color, main: bool) -> void:
+	for lp in [Vector3(-0.48, 0.14, -0.38), Vector3(0.48, 0.14, -0.38), Vector3(-0.48, 0.14, 0.38), Vector3(0.48, 0.14, 0.38)]:
+		Shape.make(Shape.CYLINDER, root, lp, Vector3(0.12, 0.14, 0.12), Palette.WOOD.darkened(0.2), false, "Ножка")
+	Shape.make(Shape.BOX, root, Vector3(0, 0.34, 0), Vector3(1.3, 0.08, 1.1), Palette.WOOD, false, "Дно")
+	Shape.make(Shape.BOX, root, Vector3(0, 0.78, 0), Vector3(1.2, 0.8, 1.0), color, false, "Корпус")
+	Shape.make(Shape.BOX, root, Vector3(0, 1.21, 0), Vector3(1.26, 0.08, 1.06), color.lightened(0.35), false, "Полоса")
+	Shape.make(Shape.BOX, root, Vector3(0, 1.36, 0), Vector3(1.2, 0.24, 1.0), color, false, "Магазин")
+	Shape.make(Shape.PRISM, root, Vector3(0, 1.48, 0), Vector3(1.5, 0.42, 1.32), Palette.ROOF if color != Palette.ROOF.lightened(0.15) else Palette.WOOD_LIGHT, false, "Крыша")
+	Shape.make(Shape.BOX, root, Vector3(0, 0.5, -0.51), Vector3(0.62, 0.07, 0.04), Palette.INK, false, "Леток")
+	Shape.make(Shape.BOX, root, Vector3(0, 0.44, -0.66), Vector3(0.78, 0.04, 0.28), Palette.WOOD_LIGHT, false, "Прилётная доска", Vector3(-12, 0, 0))
+	if main:
+		# Табличка «№1» — улей игрока
+		Shape.make(Shape.CYLINDER, root, Vector3(0, 0.9, -0.52), Vector3(0.34, 0.02, 0.34), Palette.LABEL, false, "Табличка", Vector3(90, 0, 0))
+		Shape.make(Shape.BOX, root, Vector3(0, 0.9, -0.545), Vector3(0.05, 0.18, 0.01), Palette.INK, false, "Номер")
+	else:
+		# Цветочек-роспись на боку
+		for i in 5:
+			var a := i * TAU / 5
+			Shape.make(Shape.SPHERE, root, Vector3(cos(a) * 0.09, 0.85 + sin(a) * 0.09, -0.515), Vector3(0.1, 0.1, 0.02), Palette.WHITE, false, "Роспись")
+		Shape.make(Shape.SPHERE, root, Vector3(0, 0.85, -0.52), Vector3(0.08, 0.08, 0.02), Palette.HONEY, false, "Роспись")
+
+
+func _build_hive_decor(pos: Vector3, color: Color, yaw: float) -> void:
+	var root := Shape.node("Улей деда", self, pos)
+	root.rotation_degrees.y = yaw
+	_paint_hive(root, color, false)
+	Shape.box_body(root, Vector3(0, 0.8, 0), Vector3(1.2, 1.25, 1.0))
+	_no_grass.append([pos, 1.0])
+
+
 func _build_flower_bed(center: Vector3, radius: float, count: int, grandmas: bool, tall := false) -> void:
 	var bed := Shape.node("Бабкина клумба" if grandmas else "Клумба", self, center)
-	Shape.make(Shape.CYLINDER, bed, Vector3(0, 0.03, 0), Vector3(radius * 2, 0.03, radius * 2),
-		Color(0.48, 0.36, 0.22) if tall else Color(0.42, 0.30, 0.20), false, "Земля клумбы")
+	var soil := Color("7a5236") if not tall else Color("8a6a3f")
+	Shape.make(Shape.CYLINDER, bed, Vector3(0, 0.05, 0), Vector3(radius * 2, 0.05, radius * 2), soil, false, "Земля клумбы")
 	if grandmas:
-		for i in 14:
-			var a := i / 14.0 * TAU
-			Shape.make(Shape.BOX, bed, Vector3(cos(a) * radius, 0.1, sin(a) * radius), Vector3(0.5, 0.2, 0.25),
-				Color(0.75, 0.35, 0.28), false, "Кирпич", Vector3(0, -rad_to_deg(a) + 90, 0))
+		# Бортик из побелённых кирпичей — бабушкина гордость
+		for i in 16:
+			var a := i / 16.0 * TAU
+			Shape.make(Shape.BOX, bed, Vector3(cos(a) * radius, 0.12, sin(a) * radius), Vector3(0.5, 0.22, 0.24),
+				Palette.WHITE.darkened(0.04 * (i % 2)), false, "Кирпич", Vector3(0, -rad_to_deg(a) + 90, 0))
+	var kinds := ["sunflower"] if tall else (["poppy", "chamomile", "cornflower", "aster"] if not grandmas else ["peony", "chamomile", "poppy"])
 	for i in count:
 		var a := _rng.randf() * TAU
 		var r := sqrt(_rng.randf()) * (radius - 0.5)
-		var petal: Color = Color(1.0, 0.82, 0.1) if tall else PETALS[_rng.randi() % PETALS.size()]
-		_build_flower(bed, Vector3(cos(a) * r, 0, sin(a) * r), petal, grandmas, tall)
+		_build_flower(bed, Vector3(cos(a) * r, 0, sin(a) * r), kinds[_rng.randi() % kinds.size()], grandmas, tall)
+	_no_grass.append([center, radius])
 
 
-func _build_flower(parent: Node3D, local_pos: Vector3, petal: Color, grandmas: bool, tall := false) -> void:
+func _build_flower(parent: Node3D, local_pos: Vector3, kind: String, grandmas: bool, tall := false) -> void:
 	var flower := Flower.new()
 	flower.name = "Подсолнух" if tall else "Цветок"
 	flower.position = local_pos
 	parent.add_child(flower)
-	var h := _rand(1.5, 1.9) if tall else _rand(0.6, 0.9)
-	var k := 1.8 if tall else 1.0  # подсолнух крупнее
-	var petals: Array[MeshInstance3D] = []
+	var h := _rand(1.5, 1.9) if tall else _rand(0.6, 0.85)
 	var head: Node3D
-
 	var scene := Shape.art("flower")
-	if scene:
+	if scene and not tall:
 		Shape.place_art(scene, flower, Vector3.ZERO, _rand(0, 360), false)
 		head = Shape.node("Голова", flower, Vector3(0, h, 0))
 	else:
-		Shape.make(Shape.CYLINDER, flower, Vector3(0, h / 2, 0), Vector3(0.05 * k, h / 2, 0.05 * k), Palette.LEAF, false, "Стебель")
-		Shape.make(Shape.SPHERE, flower, Vector3(0.08 * k, h * 0.45, 0), Vector3(0.18, 0.03, 0.08) * k, Palette.LEAF, false, "Листок", Vector3(0, 0, 25))
+		var k := 1.9 if tall else 1.0
+		var lean := Vector3(_rand(-8, 8), 0, _rand(-8, 8))
+		Shape.make(Shape.CYLINDER, flower, Vector3(0, h / 2, 0), Vector3(0.045 * k, h / 2, 0.045 * k), Palette.LEAF, false, "Стебель", lean)
+		for side in [-1.0, 1.0]:
+			Shape.make(Shape.SPHERE, flower, Vector3(0.09 * k * side, h * (0.35 if side < 0 else 0.5), 0), Vector3(0.2, 0.035, 0.09) * k,
+				Palette.LEAF.lightened(0.1), false, "Листок", Vector3(0, _rand(0, 180), 25 * side))
 		head = Shape.node("Голова", flower, Vector3(0, h, 0))
-		Shape.make(Shape.SPHERE, head, Vector3.ZERO, Vector3(0.16, 0.1, 0.16) * k,
-			Color(0.35, 0.22, 0.1) if tall else Color(1, 0.8, 0.2), false, "Серединка")
-		var count := 10 if tall else 6
-		for p in count:
-			var a := p * 360.0 / count
-			var dir := Basis(Vector3.UP, deg_to_rad(a)) * Vector3.BACK
-			petals.append(Shape.make(Shape.SPHERE, head, dir * 0.14 * k, Vector3(0.12, 0.04, 0.2) * k, petal, false, "Лепесток", Vector3(-12, a, 0)))
-	flower.init(head, petals, grandmas)
+		head.rotation_degrees = Vector3(-15 if tall else -8, _rand(0, 360), 0)
+		match kind:
+			"sunflower":
+				Shape.make(Shape.CYLINDER, head, Vector3.ZERO, Vector3(0.34, 0.05, 0.34), Color("5b3a1e"), false, "Семечки")
+				for p in 12:
+					var a := p * 30.0
+					Shape.make(Shape.SPHERE, head, Basis(Vector3.UP, deg_to_rad(a)) * Vector3(0, 0, 0.27), Vector3(0.12, 0.04, 0.24),
+						Color("ffc928").lerp(Color("f4a51b"), float(p % 2)), false, "Лепесток", Vector3(0, a, 0))
+			"poppy":
+				for p in 4:
+					var a := p * 90.0 + 45.0
+					Shape.make(Shape.SPHERE, head, Basis(Vector3.UP, deg_to_rad(a)) * Vector3(0, 0.02, 0.08), Vector3(0.2, 0.08, 0.2),
+						Color("e2392e"), false, "Лепесток", Vector3(-20, a, 0))
+				Shape.make(Shape.SPHERE, head, Vector3(0, 0.06, 0), Vector3(0.08, 0.06, 0.08), Palette.INK, false, "Серединка")
+			"cornflower":
+				for p in 7:
+					var a := p * 360.0 / 7
+					Shape.make(Shape.CONE, head, Basis(Vector3.UP, deg_to_rad(a)) * Vector3(0, 0.02, 0.08), Vector3(0.07, 0.07, 0.07),
+						Color("4f7fe0"), false, "Лепесток", Vector3(70, a, 0))
+				Shape.make(Shape.SPHERE, head, Vector3(0, 0.02, 0), Vector3.ONE * 0.08, Color("3d4fae"), false, "Серединка")
+			"peony":
+				Shape.make(Shape.SPHERE, head, Vector3(0, 0.04, 0), Vector3(0.3, 0.2, 0.3), Color("f28bb0"), false, "Пион")
+				Shape.make(Shape.SPHERE, head, Vector3(0, 0.1, 0), Vector3(0.2, 0.16, 0.2), Color("f7a8c4"), false, "Пион")
+			_:
+				var petal := Palette.WHITE if kind == "chamomile" else Color("b58ae0")
+				for p in 9:
+					var a := p * 40.0
+					Shape.make(Shape.SPHERE, head, Basis(Vector3.UP, deg_to_rad(a)) * Vector3(0, 0, 0.12), Vector3(0.07, 0.025, 0.16),
+						petal, false, "Лепесток", Vector3(-10, a, 0))
+				Shape.make(Shape.SPHERE, head, Vector3(0, 0.02, 0), Vector3(0.1, 0.07, 0.1), Palette.HONEY, false, "Серединка")
+	head.set_meta("dynamic", true)
+	Shape.compact(head)
+	flower.init(head, grandmas)
 	flower.prepare(true, false)
 	flowers.append(flower)
 
@@ -355,14 +481,47 @@ func _build_house(pos: Vector3) -> void:
 	if scene:
 		Shape.place_art(scene, root, Vector3.ZERO, 180.0)
 		return
-	Shape.make(Shape.BOX, root, Vector3(0, 2.5, 0), Vector3(10, 5, 8), Palette.WALL, true, "Стены")
-	Shape.make(Shape.BOX, root, Vector3(0, 5, 0), Vector3(10.6, 5.8, 5.8), Palette.ROOF, true, "Крыша", Vector3(45, 0, 0))
-	Shape.make(Shape.BOX, root, Vector3(2.5, 1.1, -4.02), Vector3(1.2, 2.2, 0.06), Palette.WOOD, false, "Дверь")
-	for x in [-3.0, -0.5]:
-		Shape.make(Shape.BOX, root, Vector3(x, 2.4, -4.03), Vector3(1.5, 1.3, 0.06), Palette.GLASS, false, "Окно")
-		Shape.make(Shape.BOX, root, Vector3(x, 2.4, -4.06), Vector3(0.08, 1.3, 0.04), Palette.WHITE, false, "Рама")
-		Shape.make(Shape.BOX, root, Vector3(x, 1.68, -4.15), Vector3(1.7, 0.1, 0.3), Palette.WHITE, false, "Подоконник")
-	Shape.make(Shape.BOX, root, Vector3(3, 7.2, 1.5), Vector3(0.7, 2, 0.7), Color(0.6, 0.3, 0.25), true, "Труба")
+	_no_grass.append([pos, 6.0])
+	# Сруб: бревенчатые стены, фундамент, двускатная крыша, резные наличники
+	Shape.make(Shape.BOX, root, Vector3(0, 0.25, 0), Vector3(10.4, 0.5, 8.4), Color("b9b0a3"), false, "Фундамент")
+	for i in 9:
+		var y := 0.75 + i * 0.5
+		Shape.make(Shape.CYLINDER, root, Vector3(0, y, -4.0), Vector3(0.5, 5.2, 0.5), Color("a8743f").lerp(Color("94633a"), float(i % 2)), false, "Бревно", Vector3(0, 0, 90))
+		Shape.make(Shape.CYLINDER, root, Vector3(0, y, 4.0), Vector3(0.5, 5.2, 0.5), Color("a8743f").lerp(Color("94633a"), float(i % 2)), false, "Бревно", Vector3(0, 0, 90))
+		Shape.make(Shape.CYLINDER, root, Vector3(-5.0, y, 0), Vector3(0.5, 4.2, 0.5), Color("a8743f").lerp(Color("94633a"), float((i + 1) % 2)), false, "Бревно", Vector3(90, 0, 0))
+		Shape.make(Shape.CYLINDER, root, Vector3(5.0, y, 0), Vector3(0.5, 4.2, 0.5), Color("a8743f").lerp(Color("94633a"), float((i + 1) % 2)), false, "Бревно", Vector3(90, 0, 0))
+	Shape.box_body(root, Vector3(0, 2.6, 0), Vector3(10.4, 5.2, 8.4))
+	Shape.make(Shape.PRISM, root, Vector3(0, 5.0, 0), Vector3(11.2, 3.0, 9.4), Color("3f7f8f"), false, "Крыша")
+	Shape.add_body(Shape.PRISM, root, Vector3(0, 5.0, 0), Vector3(11.2, 3.0, 9.4))
+	# Фронтон
+	Shape.make(Shape.PRISM, root, Vector3(-5.05, 5.0, 0), Vector3(0.1, 2.8, 7.9), Color("e6c78f"), false, "Фронтон")
+	Shape.make(Shape.CYLINDER, root, Vector3(-5.12, 5.9, 0), Vector3(0.7, 0.03, 0.7), Palette.GLASS, false, "Слуховое окно", Vector3(0, 0, 90))
+	# Окна с наличниками
+	for x in [-3.0, 0.0]:
+		_window(root, Vector3(x, 2.6, -4.28))
+	_window(root, Vector3(3.0, 2.6, 4.28), true)
+	# Крыльцо и дверь
+	Shape.make(Shape.BOX, root, Vector3(3.1, 1.6, -4.27), Vector3(1.2, 2.3, 0.06), Color("6b3f24"), false, "Дверь")
+	Shape.make(Shape.SPHERE, root, Vector3(2.7, 1.6, -4.33), Vector3.ONE * 0.1, Palette.GOLD, false, "Ручка")
+	Shape.make(Shape.BOX, root, Vector3(3.1, 0.35, -5.0), Vector3(1.8, 0.7, 1.4), Palette.WOOD, false, "Крыльцо")
+	Shape.make(Shape.PRISM, root, Vector3(3.1, 2.85, -4.9), Vector3(1.9, 0.5, 1.6), Palette.ROOF, false, "Козырёк")
+	Shape.make(Shape.BOX, root, Vector3(2.8, 7.3, 1.8), Vector3(0.7, 1.6, 0.7), Color("a14b3a"), false, "Труба")
+
+
+func _window(root: Node3D, p: Vector3, back := false) -> void:
+	var s := -1.0 if not back else 1.0
+	Shape.make(Shape.BOX, root, p, Vector3(1.4, 1.3, 0.08), Color("2e5f73"), false, "Стекло")
+	Shape.make(Shape.BOX, root, p + Vector3(0, 0, s * 0.03), Vector3(0.08, 1.3, 0.06), Palette.WHITE, false, "Рама")
+	Shape.make(Shape.BOX, root, p + Vector3(0, 0.1, s * 0.03), Vector3(1.4, 0.07, 0.06), Palette.WHITE, false, "Рама")
+	# Наличник: боковины, резной кокошник сверху, подоконник
+	for sx in [-1.0, 1.0]:
+		Shape.make(Shape.BOX, root, p + Vector3(sx * 0.8, 0, s * 0.06), Vector3(0.18, 1.6, 0.08), Palette.WHITE, false, "Наличник")
+	Shape.make(Shape.PRISM, root, p + Vector3(0, 0.78, s * 0.06), Vector3(1.9, 0.5, 0.1), Palette.WHITE, false, "Кокошник")
+	Shape.make(Shape.SPHERE, root, p + Vector3(0, 0.98, s * 0.11), Vector3(0.2, 0.2, 0.04), Palette.HIVE_BLUE, false, "Солнышко")
+	Shape.make(Shape.BOX, root, p + Vector3(0, -0.76, s * 0.12), Vector3(1.8, 0.1, 0.26), Palette.WHITE, false, "Подоконник")
+	# Ставни
+	for sx in [-1.0, 1.0]:
+		Shape.make(Shape.BOX, root, p + Vector3(sx * 1.25, 0, s * 0.08), Vector3(0.6, 1.3, 0.05), Palette.HIVE_BLUE, false, "Ставня")
 
 
 func _build_greenhouse(pos: Vector3) -> void:
@@ -371,27 +530,24 @@ func _build_greenhouse(pos: Vector3) -> void:
 	if scene:
 		Shape.place_art(scene, root, Vector3.ZERO)
 		return
-	var w := 6.0
-	var d := 4.0
-	var h := 3.0
-	var panes := [
-		[Vector3(0, h / 2, -d / 2), Vector3(w, h, 0.05), Vector3.ZERO],
-		[Vector3(0, h / 2, d / 2), Vector3(w, h, 0.05), Vector3.ZERO],
-		[Vector3(-w / 2, h / 2, 0), Vector3(0.05, h, d), Vector3.ZERO],
-		[Vector3(w / 2, h / 2, 0), Vector3(0.05, h, d), Vector3.ZERO],
-		[Vector3(0, h + 0.55, -d / 4), Vector3(w, 0.05, d / 2 + 0.3), Vector3(-28, 0, 0)],
-		[Vector3(0, h + 0.55, d / 4), Vector3(w, 0.05, d / 2 + 0.3), Vector3(28, 0, 0)],
-	]
-	for p in panes:
-		Shape.make(Shape.BOX, root, p[0], p[1], Palette.GLASS, false, "Стекло", p[2])
-		Shape.add_body(Shape.BOX, root, p[0], p[1], p[2], 0.8)  # стекло пружинит
-	for x in [-w / 2, 0.0, w / 2]:
-		for z in [-d / 2, d / 2]:
-			Shape.make(Shape.BOX, root, Vector3(x, h / 2, z), Vector3(0.08, h, 0.08), Palette.METAL)
+	_no_grass.append([pos, 4.0])
+	# Арочная теплица из поликарбоната: дуги и плёнка
+	var length := 6.0
+	var r := 1.9
+	Shape.make(Shape.CYLINDER, root, Vector3.ZERO, Vector3(r * 2, length / 2, r * 2), Palette.GLASS, false, "Плёнка", Vector3(0, 0, 90))
+	for i in 5:
+		var x := -length / 2 + i * length / 4
+		Shape.make(Shape.CYLINDER, root, Vector3(x, 0.0, 0), Vector3((r + 0.05) * 2, 0.05, (r + 0.05) * 2), Color("e8eef0"), false, "Дуга", Vector3(0, 0, 90))
+	# Внутри помидоры
 	for i in 6:
-		var p := Vector3(-2.2 + i * 0.9, 0.6, 0)
-		Shape.make(Shape.CYLINDER, root, p, Vector3(0.05, 0.6, 0.05), Palette.LEAF)
-		Shape.make(Shape.SPHERE, root, p + Vector3(0.1, 0.3, 0), Vector3.ONE * 0.18, Palette.RED)
+		var p := Vector3(-2.2 + i * 0.9, 0.55, 0.6 * (1 if i % 2 == 0 else -1))
+		Shape.make(Shape.CYLINDER, root, p, Vector3(0.05, 0.55, 0.05), Palette.LEAF, false, "Куст")
+		Shape.make(Shape.SPHERE, root, p + Vector3(0, 0.25, 0), Vector3(0.45, 0.4, 0.45), Palette.LEAF.lightened(0.1), false, "Ботва")
+		Shape.make(Shape.SPHERE, root, p + Vector3(0.18, 0.15, -0.15), Vector3.ONE * 0.16, Palette.BERRY, false, "Помидор")
+	# Стекло пружинит: коллизии — полукруг из коробок
+	for i in 5:
+		var a := PI * (i + 0.5) / 5
+		Shape.add_body(Shape.BOX, root, Vector3(0, sin(a) * r, cos(a) * r), Vector3(length, 0.1, r * 1.3), Vector3(rad_to_deg(-a) + 90, 0, 0), 0.8)
 
 
 func _build_jam_table(pos: Vector3) -> void:
@@ -495,23 +651,42 @@ func _build_tree(pos: Vector3, birch := false, poplar := false) -> void:
 	if scene and not birch and not poplar:
 		Shape.place_art(scene, root, Vector3.ZERO, yaw)
 		return
-	var s := _rand(0.85, 1.25)
+	_no_grass.append([pos, 0.8])
+	var s := _rand(0.85, 1.2)
 	if poplar:
 		Shape.make(Shape.CYLINDER, root, Vector3(0, 1.2 * s, 0), Vector3(0.4, 1.2 * s, 0.4), Palette.TRUNK, true, "Ствол")
-		Shape.make(Shape.SPHERE, root, Vector3(0, 5.0 * s, 0), Vector3(2.2, 7.0, 2.2) * s, Color(0.28, 0.55, 0.22), true, "Крона")
+		for i in 3:
+			Shape.make(Shape.SPHERE, root, Vector3(_rand(-0.3, 0.3), (3.6 + i * 1.8) * s, _rand(-0.3, 0.3)), Vector3(2.4, 3.2, 2.4) * s * (1.0 - i * 0.18),
+				Color("4f8a3c").lerp(Color("6aa24a"), i * 0.4), i == 0, "Крона")
 		return
-	var trunk := Color(0.92, 0.92, 0.88) if birch else Palette.TRUNK
-	Shape.make(Shape.CYLINDER, root, Vector3(0, 1.2 * s, 0), Vector3(0.45, 1.2 * s, 0.45), trunk, true, "Ствол")
-	if birch:
+	if map_id == "dacha" and _rng.randf() < 0.3 and not birch:
+		# Ель
+		Shape.make(Shape.CYLINDER, root, Vector3(0, 0.6, 0), Vector3(0.35, 0.6, 0.35), Palette.TRUNK, true, "Ствол")
 		for i in 4:
-			Shape.make(Shape.BOX, root, Vector3(0, 0.4 + i * 0.5, 0.2), Vector3(0.18, 0.05, 0.1), Palette.BLACK, false, "Пятно берёзы")
-	Shape.make(Shape.SPHERE, root, Vector3(0, 3.6 * s, 0), Vector3(3.2, 2.6, 3.2) * s, Color(0.42, 0.7, 0.3) if birch else Palette.LEAF, true, "Крона")
-	Shape.make(Shape.SPHERE, root, Vector3(0.9, 4.3 * s, 0.4), Vector3(2, 1.8, 2) * s, Color(0.3, 0.62, 0.26), false, "Крона")
-	Shape.make(Shape.SPHERE, root, Vector3(-0.8, 4.1 * s, -0.5), Vector3(1.8, 1.6, 1.8) * s, Color(0.22, 0.5, 0.2), false, "Крона")
+			Shape.make(Shape.CONE, root, Vector3(0, (1.6 + i * 1.1) * s, 0), Vector3(3.4 - i * 0.7, 0.9, 3.4 - i * 0.7) * s,
+				Color("2f6b3a").lerp(Color("3f8045"), i * 0.25), i == 0, "Лапы")
+		return
+	var trunk := Color("ece6d8") if birch else Palette.TRUNK
+	Shape.make(Shape.CYLINDER, root, Vector3(0, 1.1 * s, 0), Vector3(0.42, 1.1 * s, 0.42), trunk, true, "Ствол")
+	Shape.make(Shape.CYLINDER, root, Vector3(0.35, 2.0 * s, 0), Vector3(0.18, 0.6, 0.18), trunk, false, "Ветка", Vector3(0, 0, -40))
+	if birch:
+		for i in 5:
+			Shape.make(Shape.BOX, root, Vector3(0, 0.4 + i * 0.42, 0.2), Vector3(0.2, 0.05, 0.06), Palette.INK, false, "Чёрточка", Vector3(0, _rand(-40, 40), 0))
+	var leaf := Color("8cc157") if birch else Color("5b9a3e")
+	var blobs := [[Vector3(0, 3.4, 0), Vector3(3.0, 2.4, 3.0)], [Vector3(0.9, 4.0, 0.3), Vector3(2.0, 1.8, 2.0)],
+		[Vector3(-0.8, 3.9, -0.4), Vector3(1.9, 1.7, 1.9)], [Vector3(0.2, 4.6, -0.2), Vector3(1.6, 1.4, 1.6)]]
+	for i in blobs.size():
+		Shape.make(Shape.SPHERE, root, blobs[i][0] * s, blobs[i][1] * s, leaf.lerp(leaf.lightened(0.15), i * 0.3), i == 0, "Крона")
+	if not birch and map_id == "dacha":
+		# Яблоня: яблоки
+		for i in 7:
+			var a := _rng.randf() * TAU
+			Shape.make(Shape.SPHERE, root, Vector3(cos(a) * 1.35, _rand(3.0, 4.2), sin(a) * 1.35) * s, Vector3.ONE * 0.22, Palette.BERRY, false, "Яблоко")
 
 
 func _build_car(pos: Vector3, style := "") -> void:
 	_car = Shape.node("Трактор" if style == "tractor" else "Машина", self, pos)
+	_car.set_meta("dynamic", true)
 	_car_home = pos
 	car_door = Shape.node("Дверь водителя", _car, Vector3(0.3, 0, 1.4))  # со стороны участка (+Z)
 	var scene := Shape.art("tractor" if style == "tractor" else "car")
@@ -679,6 +854,108 @@ func _build_picnic(pos: Vector3) -> void:
 func _build_haystack(pos: Vector3) -> void:
 	var s := _rand(0.9, 1.3)
 	Shape.make(Shape.SPHERE, self, pos + Vector3(0, 1.2 * s, 0), Vector3(3.0, 2.8, 3.0) * s, Color(0.88, 0.76, 0.38), true, "Стог")
+
+
+# ── Горизонт и трава ───────────────────────────────────────
+
+## Холмы с лесом вокруг участка и облака — чтобы мир не обрывался.
+func _build_horizon() -> void:
+	var root := Shape.node("Горизонт", self)
+	var hill := Color("7ea05c") if map_id != "yard" else Color("8f9a78")
+	for i in 14:
+		var a := i * TAU / 14 + _rand(-0.1, 0.1)
+		var d := _rand(62, 74)
+		Shape.make(Shape.SPHERE, root, Vector3(cos(a) * d, -4, sin(a) * d), Vector3(_rand(30, 44), _rand(14, 22), _rand(22, 30)),
+			hill.lerp(hill.darkened(0.15), _rng.randf()), false, "Холм", Vector3(0, -rad_to_deg(a), 0))
+	for i in 46:
+		var a := _rng.randf() * TAU
+		var d := _rand(46, 58)
+		var h := _rand(5, 9)
+		Shape.make(Shape.CONE, root, Vector3(cos(a) * d, h * 0.5, sin(a) * d), Vector3(h * 0.6, h * 0.5, h * 0.6),
+			Color("2f6b3a").lerp(Color("3d7a45"), _rng.randf()), false, "Ёлка вдали")
+	if map_id == "yard":
+		# Город за двором: дальние дома
+		for i in 10:
+			var a := i * TAU / 10 + 0.3
+			var d := _rand(50, 60)
+			Shape.make(Shape.BOX, root, Vector3(cos(a) * d, 9, sin(a) * d), Vector3(10, 18 + _rand(0, 10), 10), Color("b9aebd").lerp(Color("c9b39f"), _rng.randf()), false, "Дом вдали", Vector3(0, -rad_to_deg(a), 0))
+	for i in 7:
+		var a := _rng.randf() * TAU
+		var d := _rand(55, 85)
+		var center := Vector3(cos(a) * d, _rand(24, 32), sin(a) * d)
+		for k in 4:
+			Shape.make(Shape.SPHERE, root, center + Vector3((k - 1.5) * 3.2, absf(k - 1.5) * -0.8, _rand(-1, 1)), Vector3(6, 4, 5) * _rand(0.8, 1.2),
+				Color("fffaf0"), false, "Облако")
+
+
+## Трава пучками: одна партия на всю карту (MultiMesh), качается на ветру.
+func _build_grass() -> void:
+	var tuft := _tuft_mesh()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	mm.mesh = tuft
+	var spots: Array[Transform3D] = []
+	var cols: Array[Color] = []
+	var tries := 0
+	while spots.size() < 2600 and tries < 9000:
+		tries += 1
+		var p := Vector3(_rand(-HALF + 0.5, HALF - 0.5), 0, _rand(-HALF + 0.5, HALF - 0.5))
+		if not _grass_zones.is_empty():
+			var inside := false
+			for z in _grass_zones:
+				if p.distance_to(z[0]) < z[1]:
+					inside = true
+			if not inside:
+				continue
+		var blocked := false
+		for z in _no_grass:
+			var c: Vector3 = z[0]
+			if z.size() > 2:
+				var e: Vector2 = z[2]
+				if absf(p.x - c.x) < e.x and absf(p.z - c.z) < e.y:
+					blocked = true
+			elif Vector2(p.x - c.x, p.z - c.z).length() < z[1]:
+				blocked = true
+		if blocked or p.length() < 1.6:
+			continue
+		var b := Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3.ONE * _rand(0.7, 1.35))
+		spots.append(Transform3D(b, p))
+		cols.append(_grass_color.lerp(_grass_color.lightened(0.18), _rng.randf()).lerp(Palette.GRASS_DARK, _rng.randf() * 0.4))
+	mm.instance_count = spots.size()
+	for i in spots.size():
+		mm.set_instance_transform(i, spots[i])
+		mm.set_instance_color(i, cols[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Трава"
+	mmi.multimesh = mm
+	var m := ShaderMaterial.new()
+	m.shader = load("res://shaders/grass.gdshader")
+	mmi.material_override = m
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+
+
+static func _tuft_mesh() -> ArrayMesh:
+	var v := PackedVector3Array()
+	var n := PackedVector3Array()
+	var c := PackedColorArray()
+	var uv := PackedVector2Array()
+	var idx := PackedInt32Array()
+	for i in 5:
+		var a := i * TAU / 5 + 0.3
+		var dir := Vector3(cos(a), 0, sin(a))
+		var side := Vector3(-dir.z, 0, dir.x) * 0.035
+		var lean := dir * 0.12
+		var h := 0.3 + (i % 3) * 0.06
+		var s := v.size()
+		v.append_array([side * -1 + dir * 0.03, side + dir * 0.03, lean + Vector3(0, h, 0)])
+		for k in 3:
+			n.append((dir + Vector3.UP).normalized())
+			c.append(Color.WHITE)
+		uv.append_array([Vector2(0, 0), Vector2(1, 0), Vector2(0.5, 1)])
+		idx.append_array([s, s + 1, s + 2])
+	return Shape._commit(v, n, c, idx, uv)
 
 
 # ── Вылет ──────────────────────────────────────────────────

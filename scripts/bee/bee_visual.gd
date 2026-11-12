@@ -73,46 +73,104 @@ func _process(delta: float) -> void:
 	flap_wings(_wings, 12.0 if _bee.is_stuck() else 55.0, Game.clock)
 
 
-## Временная пчела (или оса-гопник) из простых форм. Смотрит вперёд по +Z.
+## Пчела (или оса-гопник) из точёных форм. Смотрит вперёд по +Z.
 ## Заменяется моделью res://art/bee.glb (или wasp.glb).
+static var _templates := {}
+
+
+static func free_templates() -> void:
+	for t in _templates.values():
+		(t as Node).free()
+	_templates.clear()
+
+
 static func build_placeholder(root: Node3D, wasp: bool) -> void:
-	var body_color := Color(0.98, 0.76, 0.08) if wasp else Palette.BEE_YELLOW
-	var dark := Palette.BLACK
-	var thorax_color := dark if wasp else Color(0.30, 0.20, 0.10)
+	# Модель собирается один раз, дальше копируется (меши общие — это быстро)
+	if not _templates.has(wasp):
+		var t := Node3D.new()
+		_build(t, wasp)
+		_templates[wasp] = t
+	for c in (_templates[wasp] as Node3D).get_children():
+		root.add_child(c.duplicate())
 
-	# Брюшко с полосками
-	var ab := Vector3(0.38, 0.36, 0.62) if wasp else Vector3(0.5, 0.46, 0.68)
-	Shape.make(Shape.SPHERE, root, Vector3(0, 0, -0.12), ab, body_color, false, "Брюшко")
-	Shape.make(Shape.CYLINDER, root, Vector3(0, 0, -0.04), Vector3(ab.x, 0.035, ab.y), dark, false, "Полоска", Vector3(90, 0, 0))
-	Shape.make(Shape.CYLINDER, root, Vector3(0, 0, -0.20), Vector3(ab.x * 0.93, 0.035, ab.y * 0.93), dark, false, "Полоска", Vector3(90, 0, 0))
-	Shape.make(Shape.CYLINDER, root, Vector3(0, 0, -0.33), Vector3(ab.x * 0.72, 0.03, ab.y * 0.72), dark, false, "Полоска", Vector3(90, 0, 0))
 
-	# Грудь, голова, жало
-	Shape.make(Shape.SPHERE, root, Vector3(0, 0.02, 0.2), Vector3(0.36, 0.34, 0.34), thorax_color, false, "Грудь")
-	Shape.make(Shape.SPHERE, root, Vector3(0, 0.05, 0.42), Vector3(0.3, 0.28, 0.26), dark, false, "Голова")
-	Shape.make(Shape.CAPSULE, root, Vector3(0, -0.02, -0.5), Vector3(0.05, 0.07, 0.05), dark, false, "Жало", Vector3(90, 0, 0))
-
-	# Глаза
-	var pupil := Palette.RED if wasp else dark
-	var eye := 0.09 if wasp else 0.12
-	for side in [-1.0, 1.0]:
-		Shape.make(Shape.SPHERE, root, Vector3(0.08 * side, 0.1, 0.53), Vector3.ONE * eye, Palette.WHITE, false, "Глаз")
-		Shape.make(Shape.SPHERE, root, Vector3(0.085 * side, 0.1, 0.585), Vector3.ONE * 0.055, pupil, false, "Зрачок")
-		Shape.make(Shape.CYLINDER, root, Vector3(0.06 * side, 0.22, 0.47), Vector3(0.02, 0.1, 0.02), dark, false, "Усик",
-			Vector3(-30, 0, -20 * side))
-
+static func _build(root: Node3D, wasp: bool) -> void:
+	var dark := Color("2b1d14")
+	var yellow := Color("f4b81c") if wasp else Palette.BEE_YELLOW
+	if wasp:
+		_wasp_body(root, yellow, dark)
+	else:
+		_bee_body(root, yellow, dark)
 	# Крылья на шарнирах (машут вокруг плеча)
 	for side in [-1.0, 1.0]:
-		var pivot := Shape.node("Крыло_Л" if side < 0 else "Крыло_П", root, Vector3(0.12 * side, 0.2, 0.15))
-		Shape.make(Shape.SPHERE, pivot, Vector3(0.22 * side, 0.02, -0.05), Vector3(0.42, 0.02, 0.24), Palette.WING, false, "Перепонка")
+		var pivot := Shape.node("Крыло_Л" if side < 0 else "Крыло_П", root, Vector3(0.1 * side, 0.2, 0.08))
+		Shape.make(Shape.SPHERE, pivot, Vector3(0.2 * side, 0.03, -0.06), Vector3(0.38, 0.025, 0.24), Palette.WING, false, "Перепонка", Vector3(0, 20 * side, 0))
+		Shape.make(Shape.SPHERE, pivot, Vector3(0.14 * side, 0.02, -0.16), Vector3(0.22, 0.02, 0.14), Palette.WING, false, "Перепонка", Vector3(0, -15 * side, 0))
+	Shape.compact(root)
 
-	if not wasp:
-		return
 
-	# Оса-гопник: кепка и злые брови
-	var cap := Color(0.22, 0.22, 0.25)
-	Shape.make(Shape.CYLINDER, root, Vector3(0, 0.2, 0.42), Vector3(0.26, 0.03, 0.26), cap, false, "Кепка")
-	Shape.make(Shape.BOX, root, Vector3(0, 0.19, 0.56), Vector3(0.2, 0.02, 0.12), cap, false, "Козырёк")
+## Полоски по длине тела: профиль вращения с чёткими границами цветов.
+static func _striped(root: Node3D, pos: Vector3, length: float, radius_at: Callable, bands: Array, colors: Array) -> void:
+	var prof := []
+	var cols := []
+	var steps := 9
+	var edges: Array = bands.duplicate()
+	var band := 0
+	for i in steps + 1:
+		var t := float(i) / steps
+		while band < edges.size() and float(edges[band]) <= t:
+			# дублируем точку на границе — полоска получается резкой
+			var te: float = edges[band]
+			prof.append(Vector2(radius_at.call(te), (te - 0.5) * length))
+			cols.append(colors[band % colors.size()])
+			band += 1
+			prof.append(Vector2(radius_at.call(te), (te - 0.5) * length))
+			cols.append(colors[band % colors.size()])
+		prof.append(Vector2(radius_at.call(t), (t - 0.5) * length))
+		cols.append(colors[band % colors.size()])
+	# Лежит вдоль Z: верх профиля смотрит вперёд
+	Shape.lathe(root, pos, prof, cols, "Тело", Vector3(90, 0, 0), 10)
+
+
+static func _bee_body(root: Node3D, yellow: Color, dark: Color) -> void:
+	# Пухлое тельце: от жала (сзади) к шее (спереди)
+	var r := func(t: float) -> float: return 0.27 * pow(sin(clampf(t, 0.0, 1.0) * PI), 0.75) * (0.88 + 0.12 * t)
+	_striped(root, Vector3(0, 0, -0.08), 0.62, r, [0.16, 0.3, 0.44, 0.58], [dark, yellow])
+	Shape.make(Shape.CONE, root, Vector3(0, 0, -0.42), Vector3(0.06, 0.06, 0.06), dark, false, "Жало", Vector3(-90, 0, 0))
+	# Пушистый воротник
+	Shape.make(Shape.SPHERE, root, Vector3(0, 0.02, 0.2), Vector3(0.4, 0.36, 0.2), Color("fff1c7"), false, "Пушок")
+	# Голова, глаза с бликом, румянец, улыбка
+	Shape.make(Shape.SPHERE, root, Vector3(0, 0.06, 0.36), Vector3(0.34, 0.32, 0.3), dark, false, "Голова")
 	for side in [-1.0, 1.0]:
-		Shape.make(Shape.BOX, root, Vector3(0.08 * side, 0.165, 0.57), Vector3(0.1, 0.02, 0.02), dark, false, "Бровь",
-			Vector3(0, 0, 20 * side))
+		Shape.make(Shape.SPHERE, root, Vector3(0.085 * side, 0.1, 0.49), Vector3(0.13, 0.15, 0.06), Palette.WHITE, false, "Глаз")
+		Shape.make(Shape.SPHERE, root, Vector3(0.08 * side, 0.09, 0.52), Vector3(0.075, 0.09, 0.03), dark, false, "Зрачок")
+		Shape.make(Shape.SPHERE, root, Vector3(0.065 * side, 0.12, 0.535), Vector3(0.028, 0.028, 0.01), Palette.WHITE, false, "Блик")
+		Shape.make(Shape.SPHERE, root, Vector3(0.13 * side, 0.0, 0.47), Vector3(0.07, 0.04, 0.02), Color("ff8f86"), false, "Румянец")
+		Shape.make(Shape.CAPSULE, root, Vector3(0.07 * side, 0.27, 0.4), Vector3(0.025, 0.09, 0.025), dark, false, "Усик", Vector3(-35, 0, -18 * side))
+		Shape.make(Shape.SPHERE, root, Vector3(0.11 * side, 0.35, 0.46), Vector3.ONE * 0.06, dark, false, "Шарик усика")
+		# Лапки
+		for k in 3:
+			Shape.make(Shape.CAPSULE, root, Vector3(0.12 * side, -0.2, 0.08 - k * 0.12), Vector3(0.03, 0.08, 0.03), dark, false, "Лапка", Vector3(15, 0, 25 * side))
+	Shape.make(Shape.CAPSULE, root, Vector3(0, -0.01, 0.505), Vector3(0.012, 0.045, 0.012), Color("ff8f86"), false, "Улыбка", Vector3(0, 0, 90))
+
+
+static func _wasp_body(root: Node3D, yellow: Color, dark: Color) -> void:
+	# Осиная талия: острое брюшко, тонкая перетяжка, грудь
+	var r := func(t: float) -> float: return 0.2 * pow(sin(clampf(t, 0.0, 1.0) * PI), 1.1) * (0.6 + 0.4 * t)
+	_striped(root, Vector3(0, 0, -0.18), 0.5, r, [0.2, 0.34, 0.5, 0.66, 0.8], [dark, yellow])
+	Shape.make(Shape.CONE, root, Vector3(0, 0, -0.47), Vector3(0.05, 0.07, 0.05), dark, false, "Жало", Vector3(-90, 0, 0))
+	Shape.make(Shape.SPHERE, root, Vector3(0, 0.02, 0.15), Vector3(0.24, 0.22, 0.26), dark, false, "Грудь")
+	Shape.make(Shape.SPHERE, root, Vector3(0, 0.07, 0.33), Vector3(0.26, 0.24, 0.24), yellow, false, "Голова")
+	for side in [-1.0, 1.0]:
+		Shape.make(Shape.SPHERE, root, Vector3(0.07 * side, 0.09, 0.44), Vector3(0.09, 0.07, 0.04), Palette.WHITE, false, "Глаз")
+		Shape.make(Shape.SPHERE, root, Vector3(0.07 * side, 0.08, 0.46), Vector3(0.05, 0.05, 0.02), Color("c0282d"), false, "Зрачок")
+		Shape.make(Shape.BOX, root, Vector3(0.075 * side, 0.135, 0.455), Vector3(0.1, 0.022, 0.02), dark, false, "Бровь", Vector3(0, 0, 22 * side))
+		for k in 3:
+			Shape.make(Shape.CAPSULE, root, Vector3(0.1 * side, -0.14, 0.1 - k * 0.08), Vector3(0.025, 0.07, 0.025), dark, false, "Лапка", Vector3(15, 0, 25 * side))
+	# Кепка козырьком набок и цепь — гопник с мусорки
+	Shape.lathe(root, Vector3(0, 0.17, 0.32), [Vector2(0, 0), Vector2(0.135, 0), Vector2(0.135, 0.03), Vector2(0.1, 0.09), Vector2(0, 0.1)],
+		[Color("3a3a40"), Color("3a3a40"), Color("3a3a40"), Color("2e2e33"), Color("2e2e33")], "Кепка", Vector3.ZERO, 12)
+	Shape.make(Shape.BOX, root, Vector3(0.1, 0.18, 0.43), Vector3(0.14, 0.02, 0.13), Color("2e2e33"), false, "Козырёк", Vector3(0, 35, 0))
+	for k in 9:
+		var a := PI * 0.15 + k * PI * 0.7 / 8
+		Shape.make(Shape.SPHERE, root, Vector3(cos(a) * 0.12, -0.04 - sin(a) * 0.04, 0.24 + sin(a) * 0.06), Vector3.ONE * 0.035, Palette.GOLD, false, "Цепь")

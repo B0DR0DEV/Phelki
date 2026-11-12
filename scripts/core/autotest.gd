@@ -57,6 +57,10 @@ func _back_to_hub() -> void:
 
 
 func _run() -> void:
+	if "--preview" in OS.get_cmdline_user_args():
+		await _preview()
+		get_tree().quit(0)
+		return
 	await _test_question()
 	await _test_sortie()
 	await _test_race()
@@ -289,3 +293,104 @@ func _test_human_side() -> void:
 		if id == "team":
 			await _shot("13_itogi_vtroem")
 		await _back_to_hub()
+
+
+## Быстрый предпросмотр для проверки внешнего вида: -- --autotest --preview --shots=/папка
+func _preview() -> void:
+	var only := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--only="):
+			only = a.substr(7)
+	if only == "chars":
+		_game.answer(Profile.Side.BEE)
+		await _wait(0.5)
+		var stage := Shape.node("Витрина", _game, Vector3(0, 0, 40))
+		var bee_n := Shape.node("п", stage, Vector3(-1.6, 1.2, 0))
+		BeeVisual.build_placeholder(bee_n, false)
+		bee_n.rotation_degrees.y = 200
+		bee_n.scale = Vector3.ONE * 1.6
+		var wasp_n := Shape.node("о", stage, Vector3(-0.2, 1.2, 0))
+		BeeVisual.build_placeholder(wasp_n, true)
+		wasp_n.rotation_degrees.y = 160
+		wasp_n.scale = Vector3.ONE * 1.6
+		var h := Human.spawn(stage, Vector3(1.4, 0, 0))
+		h.facing = PI + 0.4
+		h.set_physics_process(false)
+		var bear := Shape.node("м", stage, Vector3(4.6, 0, 1.5))
+		BearRaid.new()._build_bear(bear)
+		bear.rotation_degrees.y = 210
+		bear.scale = Vector3.ONE * 0.8
+		var cam := Camera3D.new()
+		_game.add_child(cam)
+		cam.global_position = stage.global_position + Vector3(1.4, 2.0, -6.5)
+		cam.look_at(stage.global_position + Vector3(1.4, 1.1, 0))
+		cam.fov = 48
+		cam.make_current()
+		_game.ui.visible = false
+		await _wait(1.0)
+		await _shot("c_personazhi")
+		h.swelling = 0.8
+		await _wait(0.5)
+		await _shot("c_otek")
+		return
+	if only == "tris":
+		var groups := {}
+		for mi in _game.world.find_children("*", "MeshInstance3D", true, false):
+			var m := (mi as MeshInstance3D).mesh
+			if m == null:
+				continue
+			var tri := 0
+			for si in m.get_surface_count():
+				var arr := m.surface_get_arrays(si)
+				var idx = arr[Mesh.ARRAY_INDEX]
+				tri += (idx.size() if idx != null else (arr[Mesh.ARRAY_VERTEX] as PackedVector3Array).size()) / 3
+			var n: Node = mi
+			while n.get_parent() != _game.world:
+				n = n.get_parent()
+			groups[n.name] = groups.get(n.name, 0) + tri
+		var keys := groups.keys()
+		keys.sort_custom(func(a, b): return groups[a] > groups[b])
+		for k in keys.slice(0, 12):
+			print("  %s: %d" % [k, groups[k]])
+		return
+	if only == "game":
+		_game.answer(Profile.Side.BEE)
+		_game.start("sortie")
+		await _wait(0.5)
+		_game.bee.debug_steer(_game.bee.global_position + Vector3(4, 0, 6))
+		await _wait(3.0)
+		await _shot("q_igra")
+		_game.end_sortie()
+		_game.show_hub()
+		await _wait(1.5)
+		await _shot("q_menu")
+		return
+	await _wait(1.0)
+	await _shot("p00_vopros")
+	_game.answer(Profile.Side.BEE)
+	for id in World.MAP_ORDER:
+		_game.set_map(id)
+		await _wait(2.5)
+		await _shot("p1_menu_" + id)
+		_game.start("sortie")
+		await _wait(0.5)
+		var bee := _game.bee
+		bee.debug_steer(bee.global_position + Vector3(4, 0, 6))
+		await _wait(2.0)
+		bee.debug_steer(null)
+		await _wait(1.0)
+		await _shot("p2_igra_" + id)
+		print("  [%s] вызовов отрисовки: %d, треугольников: %d" % [id,
+			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME),
+			RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)])
+		_game.end_sortie()
+		_game.show_hub()
+	_game.answer(Profile.Side.HUMAN)
+	_game.set_map("dacha")
+	await _wait(1.0)
+	_game.start("escape")
+	await _wait(9.0)
+	await _shot("p3_pobeg")
+	_game.give_up()
+	await _wait(0.5)
+	await _shot("p4_itogi")

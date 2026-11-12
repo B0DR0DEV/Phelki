@@ -292,6 +292,7 @@ func _process(delta: float) -> void:
 	if at_car:
 		if not _car_said:
 			_car_said = true
+			Sfx.play("car", -2.0, 1.0, 0.0)
 			game.say(Lines.pick(Lines.CAR_STARTING))
 		car_progress = move_toward(car_progress, 1.0, delta / CAR_START_SECONDS)
 		if car_progress >= 1.0:
@@ -327,6 +328,8 @@ func on_jar_taken(jar: HoneyJar) -> void:
 		return
 	_jars.erase(jar)
 	stats.jars += 1
+	Sfx.play("jar")
+	Fx.burst(jar.global_position + Vector3(0, 1, 0), Palette.HONEY, 12, 2.5, 0.12)
 	Game.I.toast("Банка %d/%d" % [stats.jars, stats.jars_needed])
 	Game.I.say(Lines.pick(Lines.ALL_JARS if all_jars() else Lines.JAR_TAKEN))
 
